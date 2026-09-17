@@ -1,0 +1,42 @@
+{
+  "name": "stylesync-backend",
+  "version": "1.0.0",
+  "description": "StyleSync - AI Personal Shopping Advisor Production Backend",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "free-port": "powershell -Command \"Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { if ($_.OwningProcess -gt 4) { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue } }\"",
+    "seed": "node src/seed.js",
+    "clear": "node src/clear-db.js",
+    "test": "node src/test-suite.js"
+  },
+  "keywords": [
+    "stylesync",
+    "fashion-ai",
+    "shopping-advisor",
+    "gemini-vision",
+    "express",
+    "mongodb"
+  ],
+  "author": "StyleSync Team",
+  "license": "ISC",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.0",
+    "@gradio/client": "^2.6.0",
+    "bcryptjs": "^2.4.3",
+    "cloudinary": "^2.5.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.9.5",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^10.0.3",
+    "swagger-ui-express": "^5.0.1",
+    "yamljs": "^0.3.0"
+  }
+}

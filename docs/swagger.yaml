@@ -1,0 +1,604 @@
+openapi: 3.0.3
+info:
+  title: StyleSync Backend
+  description: Production REST API & AI Vision Advisor Engine for StyleSync
+  version: "1.0"
+  contact:
+    name: StyleSync AI Engineering
+servers:
+  - url: http://localhost:5000
+    description: Local Backend Server (http://localhost:5000)
+  - url: /
+    description: Current Host Server
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Enter your JWT Bearer token generated from /api/v1/auth/login or /api/v1/auth/register
+
+  schemas:
+    User:
+      type: object
+      properties:
+        _id: { type: string }
+        name: { type: string, example: "Alex Vance" }
+        email: { type: string, example: "alex@stylesync.ai" }
+        avatar: { type: string }
+        physicalTraits:
+          type: object
+          properties:
+            faceShape: { type: string, example: "Oval" }
+            skinUndertone: { type: string, example: "Warm Golden" }
+            colorSeason: { type: string, example: "Warm Autumn" }
+            bodySilhouette: { type: string, example: "Athletic V-Taper" }
+            calibrationConfidence: { type: string, example: "96%" }
+            calibrationNotes: { type: string }
+        preferences:
+          type: object
+          properties:
+            brandPreferences: { type: array, items: { type: string } }
+            sizes: { type: object }
+            avoidColors: { type: array, items: { type: string } }
+            favoriteStyles: { type: array, items: { type: string } }
+            budgetLimits: { type: object }
+        isOnboarded: { type: boolean }
+        onboardingStep: { type: number }
+
+    WardrobeItem:
+      type: object
+      properties:
+        _id: { type: string }
+        userId: { type: string }
+        name: { type: string, example: "Merino Wool Crewneck Sweater" }
+        category: { type: string, enum: [Tops, Bottoms, Outerwear, Shoes, Accessories, Eyewear, One-Piece, Other], example: "Tops" }
+        brand: { type: string, example: "COS" }
+        color: { type: string, example: "Forest Green" }
+        colorHex: { type: string, example: "#1E3A2F" }
+        price: { type: number, example: 110 }
+        imageUrl: { type: string }
+        wearCount: { type: number, example: 14 }
+        costPerWear: { type: number, example: 7.86 }
+        season: { type: string, example: "Fall/Winter" }
+
+    AnalyzedProduct:
+      type: object
+      properties:
+        _id: { type: string }
+        name: { type: string, example: "Cashmere Ribbed Cardigan" }
+        brand: { type: string, example: "Acne Studios" }
+        category: { type: string, example: "Tops" }
+        price: { type: number, example: 180 }
+        color: { type: string, example: "Warm Oatmeal" }
+        imageUrl: { type: string }
+        score: { type: number, example: 89 }
+        decision: { type: string, enum: [BUY, MAYBE, SKIP], example: "BUY" }
+        confidence: { type: string, example: "95%" }
+        breakdown:
+          type: object
+          properties:
+            styleMatch: { type: object, properties: { score: { type: number }, max: { type: number } } }
+            colorMatch: { type: object, properties: { score: { type: number }, max: { type: number } } }
+            wardrobeMatch: { type: object, properties: { score: { type: number }, max: { type: number } } }
+            versatility: { type: object, properties: { score: { type: number }, max: { type: number } } }
+            budget: { type: object, properties: { score: { type: number }, max: { type: number } } }
+            occasion: { type: object, properties: { score: { type: number }, max: { type: number } } }
+        aiExplanation: { type: string }
+        strongMatches: { type: array, items: { type: string } }
+        considerations: { type: array, items: { type: string } }
+        physicalHarmony:
+          type: object
+          properties:
+            faceMatch: { type: string }
+            complexionMatch: { type: string }
+            bodyMatch: { type: string }
+
+paths:
+  # DEFAULT / HEALTH
+  /health:
+    get:
+      summary: Health Check
+      description: Returns online status of server, MongoDB, and Gemini Vision AI engine.
+      tags: [default]
+      responses:
+        200:
+          description: Service health operational status
+
+  # AUTHENTICATION
+  /api/v1/auth/register:
+    post:
+      summary: Register User
+      description: Create a new user profile with name, email, and password.
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string, example: "Alex Vance" }
+                email: { type: string, example: "alex@stylesync.ai" }
+                password: { type: string, example: "password123" }
+      responses:
+        201:
+          description: User registered successfully, returns JWT Bearer token
+        400:
+          description: Validation error or duplicate email
+
+  /api/v1/auth/login:
+    post:
+      summary: Login User
+      description: Authenticate user and receive JWT Bearer token.
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, example: "demo@stylesync.ai" }
+                password: { type: string, example: "password123" }
+      responses:
+        200:
+          description: Successfully authenticated, returns JWT token and user profile
+        401:
+          description: Invalid email or password
+
+  /api/v1/auth/me:
+    get:
+      summary: Get Current Session Profile
+      description: Returns the authenticated user profile using Bearer JWT.
+      security:
+        - BearerAuth: []
+      tags: [auth]
+      responses:
+        200:
+          description: Active user session profile
+        401:
+          description: Unauthorized
+
+  /api/v1/auth/forgot-password:
+    post:
+      summary: Forgot Password
+      description: Dispatches password reset link.
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, example: "alex@stylesync.ai" }
+      responses:
+        200:
+          description: Reset link dispatched
+
+  # PROFILE & AI CALIBRATION
+  /api/v1/profile:
+    get:
+      summary: Get User Profile & Physical Traits
+      description: Returns user physical traits (faceShape, skinUndertone, colorSeason, bodySilhouette) and styling preferences.
+      security:
+        - BearerAuth: []
+      tags: [profile]
+      responses:
+        200:
+          description: Full profile data
+    put:
+      summary: Update User Styling Preferences
+      description: Update brand preferences, sizes, avoid colors, and budget limits.
+      security:
+        - BearerAuth: []
+      tags: [profile]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                avatar: { type: string }
+                physicalTraits: { type: object }
+                preferences: { type: object }
+      responses:
+        200:
+          description: Profile updated successfully
+
+  /api/v1/profile/onboarding:
+    post:
+      summary: Complete 6-Step Onboarding
+      description: Save answers from the 6-step personalized onboarding setup.
+      security:
+        - BearerAuth: []
+      tags: [profile]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                physicalTraits: { type: object }
+                preferences: { type: object }
+                onboardingStep: { type: number, default: 6 }
+      responses:
+        200:
+          description: Onboarding marked completed
+
+  /api/v1/profile/scan-face-body:
+    post:
+      summary: AI Vision Physical Calibration (Selfie / Portrait Scan)
+      description: Upload selfie photo to Gemini Vision to detect Face Shape, Skin Undertone, Color Season, and Body Silhouette.
+      security:
+        - BearerAuth: []
+      tags: [profile]
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+          application/json:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  example: "data:image/jpeg;base64,..."
+      responses:
+        200:
+          description: AI Vision calibration result with physical traits and styling notes
+
+  # CAPSULE WARDROBE
+  /api/v1/wardrobe:
+    get:
+      summary: Get Capsule Wardrobe Items
+      description: Retrieve user wardrobe items with optional filters by category, search term, or season.
+      security:
+        - BearerAuth: []
+      tags: [wardrobe]
+      parameters:
+        - in: query
+          name: category
+          schema: { type: string, enum: [All, Tops, Bottoms, Outerwear, Shoes, Accessories, Eyewear, One-Piece] }
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: season
+          schema: { type: string }
+      responses:
+        200:
+          description: List of wardrobe items with virtual cost-per-wear
+    post:
+      summary: Add New Wardrobe Item
+      description: Add an item with category, color, price, brand, and optional image upload.
+      security:
+        - BearerAuth: []
+      tags: [wardrobe]
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [name, category, color]
+              properties:
+                name: { type: string, example: "Merino Wool Crewneck" }
+                category: { type: string, example: "Tops" }
+                subcategory: { type: string, example: "Knitwear" }
+                brand: { type: string, example: "COS" }
+                color: { type: string, example: "Forest Green" }
+                colorHex: { type: string, example: "#1E3A2F" }
+                price: { type: number, example: 110 }
+                season: { type: string, example: "Fall/Winter" }
+                image: { type: string, format: binary }
+          application/json:
+            schema:
+              type: object
+              required: [name, category, color]
+              properties:
+                name: { type: string }
+                category: { type: string }
+                brand: { type: string }
+                color: { type: string }
+                price: { type: number }
+                imageUrl: { type: string }
+      responses:
+        201:
+          description: Wardrobe item created
+
+  /api/v1/wardrobe/{id}:
+    put:
+      summary: Update Wardrobe Item
+      description: Update details or increment wear count for cost-per-wear tracking.
+      security:
+        - BearerAuth: []
+      tags: [wardrobe]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                category: { type: string }
+                wearCount: { type: number }
+                price: { type: number }
+                isFavorite: { type: boolean }
+                image: { type: string, format: binary }
+          application/json:
+            schema:
+              type: object
+      responses:
+        200:
+          description: Wardrobe item updated
+    delete:
+      summary: Delete Wardrobe Item
+      security:
+        - BearerAuth: []
+      tags: [wardrobe]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        200:
+          description: Wardrobe item removed
+
+  # PRODUCT ADVISOR (FLAGSHIP)
+  /api/v1/products/analyze:
+    post:
+      summary: FLAGSHIP - Analyze Product with AI Vision
+      description: |
+        Multimodal evaluation analyzing product screenshot against:
+        - User face shape, skin undertone, and body silhouette
+        - Capsule wardrobe items compatibility (versatility)
+        - Budget ceilings and avoid-color lists
+        Returns 0-100 score, BUY/MAYBE/SKIP decision, scoring breakdown, and physical harmony notes.
+      security:
+        - BearerAuth: []
+      tags: [product-advisor]
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name: { type: string, example: "Cashmere Ribbed Cardigan" }
+                brand: { type: string, example: "Acne Studios" }
+                category: { type: string, example: "Tops" }
+                price: { type: number, example: 180 }
+                color: { type: string, example: "Warm Oatmeal" }
+                description: { type: string, example: "100% Mongolian Cashmere cardigan" }
+                image: { type: string, format: binary }
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                brand: { type: string }
+                category: { type: string }
+                price: { type: number }
+                color: { type: string }
+                description: { type: string }
+                imageUrl: { type: string }
+      responses:
+        201:
+          description: Product evaluated successfully with AI score and compatibility breakdown
+
+  /api/v1/products:
+    get:
+      summary: Get Evaluated Product History
+      description: Returns list of user analyzed shopping items with filters by decision (BUY, MAYBE, SKIP) or category.
+      security:
+        - BearerAuth: []
+      tags: [product-advisor]
+      parameters:
+        - in: query
+          name: decision
+          schema: { type: string, enum: [BUY, MAYBE, SKIP] }
+        - in: query
+          name: category
+          schema: { type: string }
+      responses:
+        200:
+          description: List of evaluated products
+
+  /api/v1/products/{id}:
+    get:
+      summary: Get Single Product Evaluation
+      description: Detailed breakdown of an analyzed product.
+      security:
+        - BearerAuth: []
+      tags: [product-advisor]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        200:
+          description: Product evaluation details
+
+  # AI OUTFIT BUILDER
+  /api/v1/outfits:
+    get:
+      summary: Get Saved Outfits
+      description: Returns user saved coordinated outfits.
+      security:
+        - BearerAuth: []
+      tags: [outfit-builder]
+      responses:
+        200:
+          description: List of saved outfits
+
+  /api/v1/outfits/generate:
+    post:
+      summary: Generate 4-Piece Outfit from Wardrobe
+      description: AI coordinates a 4-piece outfit from user actual database wardrobe items matching occasion, weather, and style.
+      security:
+        - BearerAuth: []
+      tags: [outfit-builder]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                occasion: { type: string, example: "Date Night" }
+                weather: { type: string, example: "Mild (15-22°C)" }
+                style: { type: string, example: "Smart Casual" }
+      responses:
+        201:
+          description: Outfit generated successfully with match score and reasoning
+
+  # PURCHASES & FEEDBACK LOOP
+  /api/v1/purchases:
+    get:
+      summary: Get Purchase Ledger & Metrics
+      description: Returns purchase history, total spent amount, and average StyleSync score.
+      security:
+        - BearerAuth: []
+      tags: [purchases]
+      responses:
+        200:
+          description: Purchase ledger and analytics
+    post:
+      summary: Record New Purchase
+      description: Logs a purchase to track budget spending and initiate styling feedback loop.
+      security:
+        - BearerAuth: []
+      tags: [purchases]
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [productName, price]
+              properties:
+                productName: { type: string, example: "Merino Wool Crewneck" }
+                price: { type: number, example: 110 }
+                category: { type: string, example: "Tops" }
+                brand: { type: string, example: "COS" }
+                buyWiseScore: { type: number, example: 92 }
+                notes: { type: string }
+                image: { type: string, format: binary }
+          application/json:
+            schema:
+              type: object
+              required: [productName, price]
+              properties:
+                productName: { type: string }
+                price: { type: number }
+                category: { type: string }
+                brand: { type: string }
+                buyWiseScore: { type: number }
+                notes: { type: string }
+      responses:
+        201:
+          description: Purchase recorded successfully
+
+  /api/v1/purchases/{id}/feedback:
+    patch:
+      summary: Update Purchase Feedback & Rating
+      description: Refines AI styling memory with real user feedback (good/bad, 1-5 rating).
+      security:
+        - BearerAuth: []
+      tags: [purchases]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                feedback: { type: string, enum: [good, bad], example: "good" }
+                rating: { type: number, minimum: 1, maximum: 5, example: 5 }
+      responses:
+        200:
+          description: Feedback updated and memory refined
+
+  # SHOPPING BUDGET
+  /api/v1/budget:
+    get:
+      summary: Get Monthly Budget & Trends
+      description: Returns monthly budget limit, current spent, category breakdowns, and 6-month historical trends.
+      security:
+        - BearerAuth: []
+      tags: [budget]
+      responses:
+        200:
+          description: Budget overview and historical trends
+
+  /api/v1/budget/limit:
+    patch:
+      summary: Update Monthly Spending Ceiling
+      description: Modify monthly spending limit or category allocations.
+      security:
+        - BearerAuth: []
+      tags: [budget]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                limit: { type: number, example: 800 }
+                categoryAllocations:
+                  type: object
+                  properties:
+                    tops: { type: number }
+                    bottoms: { type: number }
+                    outerwear: { type: number }
+                    shoes: { type: number }
+                    accessories: { type: number }
+      responses:
+        200:
+          description: Budget limits updated
+
+  # AI CHAT ASSISTANT
+  /api/v1/chat/message:
+    post:
+      summary: Chat with AI Personal Stylist
+      description: Conversational fashion assistant with user physical traits and capsule wardrobe context injected.
+      security:
+        - BearerAuth: []
+      tags: [chat]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message: { type: string, example: "What should I wear with navy chinos for an outdoor dinner?" }
+                history:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      role: { type: string, enum: [user, model] }
+                      content: { type: string }
+      responses:
+        200:
+          description: AI Stylist advice reply
