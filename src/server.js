@@ -126,31 +126,33 @@ app.get('/', (req, res) => {
 app.use(notFound);
 app.use(errorHandler);
 
-// Start Server
-const server = app.listen(config.port, () => {
-  console.log(
-    `🚀 [StyleSync Server] Running in ${config.nodeEnv} mode on http://localhost:${config.port}`
-  );
-  console.log(`📖 [API Documentation] Interactive Swagger UI: http://localhost:${config.port}/api-docs`);
-});
+// Start Server (only when not running inside Vercel serverless functions)
+if (!process.env.VERCEL) {
+  const server = app.listen(config.port, () => {
+    console.log(
+      `🚀 [StyleSync Server] Running in ${config.nodeEnv} mode on http://localhost:${config.port}`
+    );
+    console.log(`📖 [API Documentation] Interactive Swagger UI: http://localhost:${config.port}/api-docs`);
+  });
 
-// Handle port in use automatically
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.warn(`[Port Handler] Port ${config.port} temporarily busy. Retrying in 1.5s...`);
-    setTimeout(() => {
-      try {
-        server.close();
-      } catch {}
-      server.listen(config.port);
-    }, 1500);
-  } else {
-    console.error(`[Server Error]: ${err.message}`);
-  }
-});
+  // Handle port in use automatically
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.warn(`[Port Handler] Port ${config.port} temporarily busy. Retrying in 1.5s...`);
+      setTimeout(() => {
+        try {
+          server.close();
+        } catch {}
+        server.listen(config.port);
+      }, 1500);
+    } else {
+      console.error(`[Server Error]: ${err.message}`);
+    }
+  });
 
-process.on('SIGTERM', () => server.close());
-process.on('SIGINT', () => server.close());
+  process.on('SIGTERM', () => server.close());
+  process.on('SIGINT', () => server.close());
+}
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {

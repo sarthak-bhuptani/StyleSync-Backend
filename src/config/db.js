@@ -10,14 +10,15 @@ try {
 }
 
 export const connectDB = async () => {
+  if (mongoose.connection.readyState >= 1) {
+    return;
+  }
   try {
-    const conn = await mongoose.connect(config.mongoUri);
+    const conn = await mongoose.connect(config.mongoUri, {
+      serverSelectionTimeoutMS: 5000,
+    });
     console.log(`[Database] MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
     console.error(`[Database] Connection Error: ${error.message}`);
-    // If not in production, log error instead of crashing immediately so mock/test routes can run if DB is offline
-    if (config.nodeEnv === 'production') {
-      process.exit(1);
-    }
   }
 };
