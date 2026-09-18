@@ -51,7 +51,7 @@ export const PRODUCT_EVALUATION_PROMPT = ({
   productData,
 }) => `
 You are the flagship AI Personal Shopping Advisor for "StyleSync".
-Evaluate whether this shopping product will actually suit the user before they buy it.
+Evaluate whether this shopping product will actually suit the user before they buy it with realistic, fair fashion intelligence.
 
 ### USER PHYSICAL PROFILE:
 - Face Shape: ${userTraits.faceShape || 'Unspecified'}
@@ -60,48 +60,49 @@ Evaluate whether this shopping product will actually suit the user before they b
 - Body Silhouette: ${userTraits.bodySilhouette || 'Athletic V-Taper'}
 - Avoid Colors: ${JSON.stringify(preferences.avoidColors || [])}
 - Budget Limits: ${JSON.stringify(preferences.budgetLimits || {})}
-- Favorite Styles: ${JSON.stringify(preferences.favoriteStyles || [])}
+- Favorite Styles: ${JSON.stringify(preferences.favoriteStyles || ['Minimal', 'Smart Casual', 'Casual'])}
 
 ### USER'S EXISTING WARDROBE ITEMS:
 ${wardrobeSummary && wardrobeSummary.length > 0
   ? JSON.stringify(wardrobeSummary, null, 2)
-  : 'Wardrobe is currently empty or minimal.'}
+  : 'Wardrobe is starting out / capsule mode.'}
 
 ### PRODUCT TO EVALUATE:
-- Name: ${productData.name || 'Unknown'}
-- Brand: ${productData.brand || 'Unknown'}
+- Name: ${productData.name || 'Apparel Piece'}
+- Brand: ${productData.brand || 'Contemporary Brand'}
 - Category: ${productData.category || 'Tops'}
-- Price: $${productData.price || 0}
-- Color: ${productData.color || 'Unspecified'}
+- Price: ₹${productData.price || 0} INR (Indian Rupees)
+- Color: ${productData.color || 'Neutral'}
 - Description: ${productData.description || 'N/A'}
 
-### EVALUATION RULES:
-1. NON-APPAREL CHECK: If the image is clearly NOT a wearable apparel item, shoe, bag, eyewear, or fashion accessory (e.g. it is a car, animal, food, computer, meme, landscape), immediately return score: 15, decision: "SKIP", confidence: "99%", and aiExplanation: "This image does not appear to be a wearable fashion or apparel item."
-2. CRITICAL CHECKS:
-   - Check if product color matches or clashes with the user's Avoid Colors (${JSON.stringify(preferences.avoidColors || [])}).
-   - Check if the item price exceeds the user's category budget.
-   - Evaluate color contrast against user's skin undertone (${userTraits.skinUndertone}) and color season (${userTraits.colorSeason}).
-   - Evaluate cut/silhouette harmony against user's body shape (${userTraits.bodySilhouette}) and face shape (${userTraits.faceShape}).
-   - Cross-reference existing wardrobe items to determine versatility (can it form at least 3 distinct outfits?).
-3. SCORING BREAKDOWN (Total: 0 to 100):
+### EVALUATION & FAIR SCORING GUIDELINES:
+1. NON-APPAREL CHECK: Only return score < 30 (decision: "SKIP") if the image is strictly a non-clothing/non-wearable object (e.g. car, animal, electronic gadget, meme, landscape).
+2. CURRENCY & BUDGET CONTEXT: Price is in Indian Rupees (INR ₹). Normal apparel pricing in India (₹500 - ₹3,500) is reasonable and should score 8-10/10 for budget fit.
+3. FOUNDATIONAL CAPSULE ESSENTIALS (T-Shirts, Shirts, Jeans, Chinos, Sneakers):
+   - Foundational pieces (like clean crewneck/v-neck t-shirts, oxford shirts, slim/straight trousers, denim, white sneakers) are essential wardrobe staples.
+   - If the user's wardrobe is empty or has few items, do NOT penalize wardrobeMatch or versatility! Reward high versatility (16-19/20 for wardrobeMatch and 12-15/15 for versatility) because they form the base of future outfits.
+   - Unless a piece directly clashes with the user's Avoid Colors or has poor cut proportions, standard stylish garments should score between 80 to 95 ('BUY').
+4. AVOID COLOR SENSITIVITY:
+   - Only dock significant points if the product's primary color directly matches an Avoid Color (e.g., product is neon yellow when Avoid Colors has 'Neon Yellow').
+5. SCORING BREAKDOWN (Total: 0 to 100):
    - styleMatch (max: 25)
    - colorMatch (max: 20)
    - wardrobeMatch (max: 20)
    - versatility (max: 15)
    - budget (max: 10)
    - occasion (max: 10)
-4. DECISION THRESHOLDS:
-   - Score >= 75: 'BUY'
-   - Score >= 50 and < 75: 'MAYBE'
-   - Score < 50: 'SKIP'
+6. DECISION THRESHOLDS:
+   - Score >= 75: 'BUY' (Highly recommended)
+   - Score >= 55 and < 75: 'MAYBE' (Conditional recommendation)
+   - Score < 55: 'SKIP' (Not recommended)
 
 Return ONLY a valid, raw JSON object (no markdown, no quotes around json) with this exact schema:
 {
-  "detectedName": "Recognized name of item e.g. Classic Black Rectangular Sunglasses",
+  "detectedName": "Recognized name of item e.g. Classic Crewneck Cotton T-Shirt",
   "detectedCategory": "Eyewear" | "Tops" | "Bottoms" | "Shoes" | "Outerwear" | "Accessories",
-  "score": number (0-100),
+  "score": number,
   "decision": "BUY" | "MAYBE" | "SKIP",
-  "confidence": "92%",
+  "confidence": "94%",
   "breakdown": {
     "styleMatch": { "score": number, "max": 25 },
     "colorMatch": { "score": number, "max": 20 },
@@ -110,14 +111,14 @@ Return ONLY a valid, raw JSON object (no markdown, no quotes around json) with t
     "budget": { "score": number, "max": 10 },
     "occasion": { "score": number, "max": 10 }
   },
-  "aiExplanation": "Clear, direct, actionable 2-4 sentence verdict explaining why the user should BUY, MAYBE, or SKIP this piece.",
-  "strongMatches": ["Point 1 of why this works well", "Point 2 of synergy with physical traits or wardrobe"],
-  "considerations": ["Potential drawback, tailoring need, or styling caution"],
-  "compatibleWardrobeIds": ["_id of compatible wardrobe item from user list", "..."],
+  "aiExplanation": "Clear, direct, actionable 2-4 sentence verdict explaining why this piece suits the user.",
+  "strongMatches": ["Point 1 of why this works well", "Point 2 of synergy with physical traits or versatility"],
+  "considerations": ["Helpful styling tip or pairing advice"],
+  "compatibleWardrobeIds": [],
   "physicalHarmony": {
-    "faceMatch": "How this garment neckline/eyewear complements their face shape",
-    "complexionMatch": "How this color enhances their undertone and color season",
-    "bodyMatch": "How this silhouette accents or balances their body shape"
+    "faceMatch": "How this neckline/frame harmonizes with face shape",
+    "complexionMatch": "How this color complements their undertone and color season",
+    "bodyMatch": "How this cut flatters their body silhouette"
   }
 }
 `;
@@ -184,7 +185,7 @@ export const PRODUCT_COMPARISON_PROMPT = ({
   itemB,
 }) => `
 You are StyleSync's Chief Fashion Duel Judge.
-A user is trying to decide between two shopping candidates. Compare both items head-to-head with extreme fashion precision against their unique physical traits and closet inventory.
+A user is deciding between two shopping candidates. Compare both items head-to-head with fashion precision against their physical traits, personal style, and closet inventory.
 
 ### USER PHYSICAL PROFILE:
 - Face Shape: ${userTraits.faceShape || 'Oval'}
@@ -195,13 +196,13 @@ A user is trying to decide between two shopping candidates. Compare both items h
 - Category Budgets: ${JSON.stringify(preferences.budgetLimits || {})}
 
 ### USER'S WARDROBE INVENTORY:
-${wardrobeSummary && wardrobeSummary.length > 0 ? JSON.stringify(wardrobeSummary, null, 2) : 'Wardrobe is minimal or empty.'}
+${wardrobeSummary && wardrobeSummary.length > 0 ? JSON.stringify(wardrobeSummary, null, 2) : 'Wardrobe is starting out / capsule mode.'}
 
 ### CANDIDATE A:
 - Name: ${itemA.name || 'Candidate A'}
 - Category: ${itemA.category || 'Tops'}
 - Brand: ${itemA.brand || 'Brand A'}
-- Price: $${itemA.price || 0}
+- Price: ₹${itemA.price || 0} INR
 - Color: ${itemA.color || 'Color A'}
 - Details: ${itemA.description || ''}
 
@@ -209,54 +210,52 @@ ${wardrobeSummary && wardrobeSummary.length > 0 ? JSON.stringify(wardrobeSummary
 - Name: ${itemB.name || 'Candidate B'}
 - Category: ${itemB.category || 'Tops'}
 - Brand: ${itemB.brand || 'Brand B'}
-- Price: $${itemB.price || 0}
+- Price: ₹${itemB.price || 0} INR
 - Color: ${itemB.color || 'Color B'}
 - Details: ${itemB.description || ''}
 
 Compare both across 4 critical pillars:
-1. FACE & SILHOUETTE HARMONY: Which piece better flatters or balances the user's facial geometry (especially for eyewear/necklines) and body build?
-2. COLOR SYNERGY: Which shade flatters their skin undertone vs washes out or clashes?
-3. WARDROBE COMPATIBILITY: Which item forms more cohesive outfits with clothes they actually own?
-4. COST-PER-WEAR & VALUE: Considering price vs expected versatility.
+1. FACE & CUT HARMONY: Which piece better flatters the user's face shape (neckline / collar / frame) and body shape?
+2. COLOR SYNERGY: Which shade enhances their natural skin undertone and color season?
+3. WARDROBE COMPATIBILITY: Which item creates more outfits with their wardrobe or versatile staples?
+4. COST-PER-WEAR & VALUE: Evaluate price (in ₹ INR) vs expected versatility and longevity.
+
+Rules:
+- Write in clean, concise, friendly language. Do not output raw hex codes or technical jargon.
+- Always quote prices in ₹ INR.
+- Set winnerItem to "Candidate A" or "Candidate B".
 
 Return ONLY a valid raw JSON object (no markdown, no other text):
 {
   "winner": "itemA" | "itemB" | "tie",
-  "winnerName": "string",
-  "confidence": "94%",
-  "verdictSummary": "Direct, crisp 2-3 sentence conclusion stating exactly which item to buy and why.",
+  "winnerName": "Short clean name of winner",
+  "confidence": "95%",
+  "verdictSummary": "Direct, clear 2-3 sentence conclusion stating which item to buy and why it wins over the other candidate.",
   "categories": {
     "faceMatch": {
       "winner": "itemA" | "itemB" | "tie",
-      "winnerItem": "string",
-      "reason": "Clear explanation of frame or neckline contour match"
+      "winnerItem": "Candidate A" | "Candidate B",
+      "reason": "Clear explanation of neckline or silhouette harmony"
     },
     "colorMatch": {
       "winner": "itemA" | "itemB" | "tie",
-      "winnerItem": "string",
-      "reason": "Why this color harmonizes with their skin undertone"
+      "winnerItem": "Candidate A" | "Candidate B",
+      "reason": "Why this color harmonizes with their skin tone"
     },
     "wardrobeMatch": {
       "winner": "itemA" | "itemB" | "tie",
-      "winnerItem": "string",
-      "reason": "Comparison of closet versatility"
+      "winnerItem": "Candidate A" | "Candidate B",
+      "reason": "How this item matches more outfits"
     },
     "costPerWear": {
       "winner": "itemA" | "itemB" | "tie",
-      "winnerItem": "string",
-      "itemACpw": number,
-      "itemBCpw": number,
-      "reason": "Value and wear frequency assessment"
+      "winnerItem": "Candidate A" | "Candidate B",
+      "reason": "Clear value and wear frequency assessment in ₹ INR"
     }
-  },
-  "itemAScore": number (0-100),
-  "itemBScore": number (0-100)
+  }
 }
 `;
 
-/**
- * Complete the Look & Cost-Per-Wear Regret Risk Prompt
- */
 export const COMPLETE_THE_LOOK_PROMPT = ({
   userTraits,
   productData,
