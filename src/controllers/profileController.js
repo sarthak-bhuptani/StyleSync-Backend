@@ -75,6 +75,8 @@ export const updateProfile = async (req, res, next) => {
       physicalAnalysis,
       preferences,
       sizes,
+      budget,
+      styleArchetype,
       stylePreferences,
       favoriteColors,
       avoidColors,
@@ -82,8 +84,10 @@ export const updateProfile = async (req, res, next) => {
       brandsToAvoid,
       gender,
       height,
+      weight,
       location,
       isOnboarded,
+      onboardingCompleted,
       onboardingStep,
     } = req.body;
 
@@ -95,9 +99,15 @@ export const updateProfile = async (req, res, next) => {
     if (name) user.name = name;
     if (avatar) user.avatar = avatar;
     if (gender) user.gender = gender;
-    if (height) user.height = height;
+    if (height) user.physicalTraits.height = height;
+    if (weight) user.physicalTraits.weight = weight;
+    if (styleArchetype) user.styleArchetype = styleArchetype;
     if (location) user.location = location;
     if (isOnboarded !== undefined) user.isOnboarded = isOnboarded;
+    if (onboardingCompleted !== undefined) {
+      user.isOnboarded = onboardingCompleted;
+      user.onboardingCompleted = onboardingCompleted;
+    }
     if (onboardingStep !== undefined) user.onboardingStep = onboardingStep;
 
     if (physicalTraits || physicalAnalysis) {
@@ -116,9 +126,20 @@ export const updateProfile = async (req, res, next) => {
     }
 
     if (sizes) {
+      user.sizes = {
+        ...user.sizes.toObject(),
+        ...sizes,
+      };
       user.preferences.sizes = {
         ...user.preferences.sizes.toObject(),
         ...sizes,
+      };
+    }
+
+    if (budget) {
+      user.budget = {
+        ...user.budget.toObject(),
+        ...budget,
       };
     }
 
@@ -133,6 +154,7 @@ export const updateProfile = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: 'Profile updated successfully',
+      user,
       data: user,
     });
   } catch (error) {
@@ -141,24 +163,62 @@ export const updateProfile = async (req, res, next) => {
 };
 
 /**
- * @desc    Complete 6-step personalized onboarding
+ * @desc    Complete personalized onboarding
  * @route   POST /api/v1/profile/onboarding
  * @access  Private
  */
 export const completeOnboarding = async (req, res, next) => {
   try {
-    const { physicalTraits, physicalAnalysis, preferences, onboardingStep = 6 } = req.body;
+    const {
+      gender,
+      styleArchetype,
+      bodyType,
+      skinUndertone,
+      sizes,
+      budget,
+      physicalTraits,
+      physicalAnalysis,
+      preferences,
+      onboardingStep = 6,
+    } = req.body;
 
     const user = await User.findById(req.user.id);
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    if (physicalTraits || physicalAnalysis) {
-      const normalized = normalizePhysicalTraits(physicalTraits || physicalAnalysis);
+    if (gender) user.gender = gender;
+    if (styleArchetype) user.styleArchetype = styleArchetype;
+
+    const mergedTraits = {
+      ...(physicalTraits || physicalAnalysis || {}),
+      ...(bodyType ? { bodyType, bodySilhouette: bodyType } : {}),
+      ...(skinUndertone ? { skinUndertone } : {}),
+    };
+
+    if (Object.keys(mergedTraits).length > 0) {
+      const normalized = normalizePhysicalTraits(mergedTraits);
       user.physicalTraits = {
         ...user.physicalTraits.toObject(),
         ...normalized,
+      };
+    }
+
+    if (sizes) {
+      user.sizes = {
+        ...user.sizes.toObject(),
+        ...sizes,
+      };
+      user.preferences.sizes = {
+        ...user.preferences.sizes.toObject(),
+        ...sizes,
+      };
+    }
+
+    if (budget) {
+      user.budget = {
+        ...user.budget.toObject(),
+        ...budget,
       };
     }
 
@@ -170,6 +230,7 @@ export const completeOnboarding = async (req, res, next) => {
     }
 
     user.isOnboarded = true;
+    user.onboardingCompleted = true;
     user.onboardingStep = onboardingStep;
 
     await user.save();
@@ -177,12 +238,14 @@ export const completeOnboarding = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: 'Onboarding completed successfully',
+      user,
       data: user,
     });
   } catch (error) {
     next(error);
   }
 };
+
 
 /**
  * @desc    AI Physical Calibration via Selfie/Portrait photo scan
@@ -297,9 +360,14 @@ export const getColorDraping = async (req, res, next) => {
     }
 
     const drapingData = await getColorDrapingAnalysisWithGemini(user.physicalTraits);
+
     res.status(200).json({
       success: true,
       message: 'Color draping matrix generated',
+      season: drapingData.season || user.physicalTraits?.colorSeason || 'Deep Autumn',
+      undertone: drapingData.undertone || user.physicalTraits?.skinUndertone || 'Warm Golden',
+      drapingInsight: drapingData.drapingInsight || '',
+      swatches: drapingData.swatches || [],
       data: {
         ...drapingData,
         avatar: user.avatar,
@@ -310,3 +378,4 @@ export const getColorDraping = async (req, res, next) => {
     next(error);
   }
 };
+

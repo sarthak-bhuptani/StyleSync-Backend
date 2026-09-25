@@ -46,6 +46,20 @@ const wardrobeItemSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    fabric: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    pattern: {
+      type: String,
+      default: 'Solid',
+    },
+    formality: {
+      type: String,
+      enum: ['Casual', 'Smart Casual', 'Formal', 'Other'],
+      default: 'Smart Casual',
+    },
     wearCount: {
       type: Number,
       default: 0,
@@ -53,8 +67,8 @@ const wardrobeItemSchema = new mongoose.Schema(
     },
     season: {
       type: String,
-      enum: ['All-Season', 'Spring/Summer', 'Fall/Winter', 'Summer', 'Winter'],
-      default: 'All-Season',
+      enum: ['All-Season', 'Spring/Summer', 'Fall/Winter', 'Summer', 'Winter', 'All Season', 'Transitional'],
+      default: 'All Season',
     },
     tags: [{ type: String }],
     isFavorite: {
@@ -69,6 +83,14 @@ const wardrobeItemSchema = new mongoose.Schema(
   }
 );
 
+// Virtual for usageCount (alias to wearCount)
+wardrobeItemSchema.virtual('usageCount').get(function () {
+  return this.wearCount || 0;
+});
+wardrobeItemSchema.virtual('usageCount').set(function (val) {
+  this.wearCount = val;
+});
+
 // Virtual for Cost Per Wear calculation
 wardrobeItemSchema.virtual('costPerWear').get(function () {
   if (!this.price || this.price <= 0) return 0;
@@ -76,5 +98,6 @@ wardrobeItemSchema.virtual('costPerWear').get(function () {
   if (count <= 0) return this.price;
   return Number((this.price / count).toFixed(2));
 });
+
 
 export const WardrobeItem = mongoose.model('WardrobeItem', wardrobeItemSchema);

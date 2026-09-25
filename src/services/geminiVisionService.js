@@ -7,6 +7,7 @@ import {
   PRODUCT_COMPARISON_PROMPT,
   COMPLETE_THE_LOOK_PROMPT,
   COLOR_DRAPING_ANALYSIS_PROMPT,
+  CAPSULE_GAP_PROMPT,
 } from './promptTemplates.js';
 
 /**
@@ -455,3 +456,153 @@ export const getColorDrapingAnalysisWithGemini = async (userTraits = {}) => {
     swatches
   };
 };
+
+/**
+ * Capsule Wardrobe Gap Engine: Detect missing essentials using AI & category heuristics
+ */
+export const detectWardrobeGapsWithGemini = async ({
+  user,
+  wardrobeItems = [],
+}) => {
+  const userTraits = user?.physicalTraits || {};
+  const styleArchetype = user?.styleArchetype || user?.preferences?.favoriteStyles?.[0] || 'Smart Casual';
+  const gender = user?.gender || 'Unspecified';
+
+  const wardrobeCategoryCounts = {
+    Tops: 0,
+    Bottoms: 0,
+    Shoes: 0,
+    Outerwear: 0,
+    Accessories: 0,
+  };
+
+  wardrobeItems.forEach((item) => {
+    const cat = item.category || 'Tops';
+    if (wardrobeCategoryCounts[cat] !== undefined) {
+      wardrobeCategoryCounts[cat]++;
+    } else {
+      wardrobeCategoryCounts[cat] = 1;
+    }
+  });
+
+  const wardrobeItemsSummary = wardrobeItems.map((item) => ({
+    name: item.name,
+    category: item.category,
+    color: item.color,
+    brand: item.brand,
+  }));
+
+  try {
+    return await runWithAiResilience(async (model) => {
+      const prompt = CAPSULE_GAP_PROMPT({
+        userTraits,
+        styleArchetype,
+        gender,
+        wardrobeCategoryCounts,
+        wardrobeItemsSummary,
+      });
+
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      return safeJsonParse(response.text());
+    });
+  } catch (err) {
+    console.warn('[AI Engine] Capsule Gaps fallback invoked:', err.message);
+
+    const missingCategories = Object.keys(wardrobeCategoryCounts).filter(
+      (cat) => wardrobeCategoryCounts[cat] === 0
+    );
+
+    const gaps = [];
+
+    if (wardrobeCategoryCounts.Shoes < 2) {
+      gaps.push({
+        id: 'gap_sneaker_01',
+        title: 'Minimalist White Leather Low-Top Sneaker',
+        category: 'Shoes',
+        priority: 'High',
+        unlocksOutfitsCount: 14,
+        reason: 'The single most versatile footwear piece. Bridges your chinos and denim with casual tees and structured blazers.',
+        missingRole: 'Universal smart-casual footwear foundation',
+        priceRange: '₹2,500 – ₹6,000',
+        curatedPicks: [
+          {
+            name: 'Stan Smith Leather',
+            brand: 'Adidas Originals',
+            price: 4999,
+            image: 'https://images.unsplash.com/photo-1549298916-b41d501d3772?w=500&auto=format&fit=crop&q=80',
+          },
+        ],
+      });
+    }
+
+    if (wardrobeCategoryCounts.Outerwear < 2) {
+      gaps.push({
+        id: 'gap_knit_02',
+        title: 'Merino Wool Crewneck Sweater',
+        category: 'Outerwear',
+        priority: 'Medium',
+        unlocksOutfitsCount: 8,
+        reason: 'Essential mid-layer for transitional weather (15°C – 22°C).',
+        missingRole: 'Versatile smart-casual mid-layer',
+        priceRange: '₹2,990 – ₹5,500',
+        curatedPicks: [
+          {
+            name: 'Fine Merino Crew',
+            brand: 'Uniqlo',
+            price: 2990,
+            image: 'https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?w=500&auto=format&fit=crop&q=80',
+          },
+        ],
+      });
+    }
+
+    if (wardrobeCategoryCounts.Bottoms < 2) {
+      gaps.push({
+        id: 'gap_chinos_03',
+        title: 'Tailored Slim-Fit Chinos',
+        category: 'Bottoms',
+        priority: 'High',
+        unlocksOutfitsCount: 11,
+        reason: 'Elevates everyday casual wear to smart casual with sharp silhouette structure.',
+        missingRole: 'Smart casual bottom foundation',
+        priceRange: '₹1,999 – ₹4,500',
+        curatedPicks: [
+          {
+            name: 'Smart Ankle Pants',
+            brand: 'Uniqlo',
+            price: 2990,
+            image: 'https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=500&auto=format&fit=crop&q=80',
+          },
+        ],
+      });
+    }
+
+    if (gaps.length === 0) {
+      gaps.push({
+        id: 'gap_oxford_04',
+        title: 'Classic Oxford Button-Down Shirt',
+        category: 'Tops',
+        priority: 'Medium',
+        unlocksOutfitsCount: 9,
+        reason: 'Universal button-down staple for layering under knits or wearing open over clean tees.',
+        missingRole: 'Foundational smart-casual shirting',
+        priceRange: '₹1,800 – ₹3,990',
+        curatedPicks: [
+          {
+            name: 'Oxford Slim-Fit Shirt',
+            brand: 'Zara',
+            price: 2590,
+            image: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=500&auto=format&fit=crop&q=80',
+          },
+        ],
+      });
+    }
+
+    return {
+      missingCategories: missingCategories.length > 0 ? missingCategories : ['Shoes', 'Outerwear'],
+      gaps,
+    };
+  }
+};
+

@@ -72,17 +72,43 @@ export const getBudget = async (req, res, next) => {
         ? Math.min(100, Math.round((currentSpent / budget.monthlyLimit) * 100))
         : 0;
 
+    const categoriesArray = [
+      { name: 'Tops', allocated: budget.categoryAllocations?.tops || 8000, spent: categorySpent.tops },
+      { name: 'Bottoms', allocated: budget.categoryAllocations?.bottoms || 7000, spent: categorySpent.bottoms },
+      { name: 'Shoes', allocated: budget.categoryAllocations?.shoes || 6000, spent: categorySpent.shoes },
+      { name: 'Outerwear', allocated: budget.categoryAllocations?.outerwear || 4000, spent: categorySpent.outerwear },
+    ];
+
+    const sixMonthTrends = (budget.monthlyHistory || []).slice(-6).map((m) => ({
+      month: m.monthName || m.month,
+      spent: m.spent || 0,
+      limit: m.limit || budget.monthlyLimit,
+      saved: m.saved || 0,
+    }));
+
     res.status(200).json({
       success: true,
+      monthlyLimit: budget.monthlyLimit,
+      spentThisMonth: currentSpent,
+      currency: budget.currency || '₹',
+      categories: categoriesArray,
+      sixMonthTrends: sixMonthTrends.length > 0 ? sixMonthTrends : [
+        { month: 'Apr', spent: 12000 },
+        { month: 'May', spent: 18500 },
+        { month: 'Jun', spent: currentSpent || 14200 },
+      ],
       data: {
         monthlyLimit: budget.monthlyLimit,
         currentSpent,
+        spentThisMonth: currentSpent,
         remaining,
         percentUsed,
-        currency: budget.currency || 'USD',
+        currency: budget.currency || '₹',
         categoryAllocations: budget.categoryAllocations,
         categorySpent,
+        categories: categoriesArray,
         monthlyHistory: budget.monthlyHistory,
+        sixMonthTrends,
       },
     });
   } catch (error) {
@@ -122,9 +148,83 @@ export const updateBudgetLimit = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: 'Budget settings updated successfully',
+      monthlyLimit: budget.monthlyLimit,
       data: budget,
     });
   } catch (error) {
     next(error);
   }
 };
+
+/**
+ * @desc    Add clothing purchase expense to monthly budget tracking
+ * @route   POST /api/v1/budget/expense
+ * @access  Private
+ */
+export const addExpense = async (req, res, next) => {
+  try {
+    const {
+      amount,
+      price,
+      category = 'Tops',
+      productName,
+      name,
+      notes = '',
+      brand = '',
+      date,
+    } = req.body;
+
+    const expenseAmount = Number(amount !== undefined ? amount : price);
+
+    if (isNaN(expenseAmount) || expenseAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid positive expense amount or price',
+      });
+    }
+
+    const finalProductName = productName || name || `${category} Purchase`;
+    const expenseDate = date ? new Date(date) : new Date();
+
+    // 1. Create Purchase record in Database
+    const purchase = await Purchase.create({
+      userId: req.user.id,
+      productName: finalProductName,
+      price: expenseAmount,
+      category,
+      brand,
+      notes,
+      purchasedAt: expenseDate,
+      date: expenseDate,
+    });
+
+    // 2. Update Budget monthly spent
+    let budget = await Budget.findOne({ userId: req.user.id });
+    if (!budget) {
+      budget = await Budget.create({ userId: req.user.id, monthlyLimit: 25000 });
+    }
+
+    if (budget.monthlyHistory && budget.monthlyHistory.length > 0) {
+      const currentMonth = budget.monthlyHistory[budget.monthlyHistory.length - 1];
+      if (currentMonth) {
+        currentMonth.spent += expenseAmount;
+        currentMonth.saved = Math.max(0, currentMonth.limit - currentMonth.spent);
+      }
+    }
+
+    await budget.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Clothing expense added to monthly budget tracking',
+      data: {
+        purchase,
+        budget,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+

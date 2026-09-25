@@ -31,17 +31,27 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    gender: {
+      type: String,
+      enum: ['Male', 'Female', 'Non-Binary', 'Other', 'Unspecified'],
+      default: 'Male',
+    },
+    styleArchetype: {
+      type: String,
+      default: 'Smart Casual',
+    },
     // AI Physical Calibration Traits
     physicalTraits: {
+      bodyType: { type: String, default: 'Trapezoid / Athletic' },
       faceShape: {
         type: String,
         enum: ['Oval', 'Square', 'Round', 'Heart', 'Oblong', 'Diamond', 'Uncalibrated'],
-        default: 'Uncalibrated',
+        default: 'Oval',
       },
       skinUndertone: {
         type: String,
-        enum: ['Warm Golden', 'Cool Rosy', 'Neutral', 'Olive', 'Deep Warm', 'Uncalibrated'],
-        default: 'Uncalibrated',
+        enum: ['Warm Golden', 'Cool Rosy', 'Neutral', 'Olive', 'Deep Warm', 'Neutral Olive', 'Uncalibrated'],
+        default: 'Warm Golden',
       },
       colorSeason: {
         type: String,
@@ -51,10 +61,13 @@ const userSchema = new mongoose.Schema(
           'Light Spring',
           'Soft Summer',
           'Deep Autumn',
+          'Warm Spring',
+          'Cool Summer',
+          'Deep Winter',
           'Clear Winter',
           'Uncalibrated',
         ],
-        default: 'Uncalibrated',
+        default: 'Deep Autumn',
       },
       bodySilhouette: {
         type: String,
@@ -65,17 +78,29 @@ const userSchema = new mongoose.Schema(
           'Pear/Triangle',
           'Inverted Triangle',
           'Oval/Apple',
+          'Trapezoid / Athletic',
+          'Rectangle',
+          'Oval',
           'Uncalibrated',
         ],
-        default: 'Uncalibrated',
+        default: 'Athletic V-Taper',
       },
       hairColor: { type: String, default: '' },
       eyeColor: { type: String, default: '' },
-      height: { type: String, default: '' },
-      weight: { type: String, default: '' },
+      height: { type: mongoose.Schema.Types.Mixed, default: 178 },
+      weight: { type: mongoose.Schema.Types.Mixed, default: 75 },
       calibrationConfidence: { type: String, default: '0%' },
       calibrationNotes: { type: String, default: '' },
       calibratedAt: { type: Date },
+    },
+    sizes: {
+      top: { type: String, default: 'M' },
+      bottom: { type: String, default: '32' },
+      shoe: { type: String, default: 'UK 9 / US 10' },
+    },
+    budget: {
+      monthlyLimit: { type: Number, default: 25000 },
+      currency: { type: String, default: '₹' },
     },
     // Styling Preferences
     preferences: {
@@ -101,6 +126,10 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    onboardingCompleted: {
+      type: Boolean,
+      default: false,
+    },
     onboardingStep: {
       type: Number,
       default: 1,
@@ -110,8 +139,11 @@ const userSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 );
+
 
 // Hash password before saving
 userSchema.pre('save', async function (next) {

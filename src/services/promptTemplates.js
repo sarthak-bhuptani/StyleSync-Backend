@@ -354,16 +354,71 @@ Return a tailored 16-swatch digital draping matrix mapping out exact hex colors 
 
 Return ONLY a valid raw JSON object:
 {
-  "season": "${userTraits.colorSeason || 'Warm Autumn'}",
+  "season": "${userTraits.colorSeason || 'Deep Autumn'}",
   "undertone": "${userTraits.skinUndertone || 'Warm Golden'}",
   "drapingInsight": "2-3 sentences explaining the science of how their undertone interacts with warm vs cool light reflectivity.",
   "swatches": [
     {
-      "name": "Earthy Terracotta",
+      "name": "Warm Terracotta",
       "hex": "#C85A32",
       "category": "power",
-      "effect": "Enhances natural facial warmth and brightens complexion"
+      "effect": "Illuminates skin & cheekbones"
     }
   ]
 }
 `;
+
+/**
+ * Capsule Wardrobe Gap Engine Prompt
+ */
+export const CAPSULE_GAP_PROMPT = ({
+  userTraits,
+  styleArchetype,
+  gender,
+  wardrobeCategoryCounts,
+  wardrobeItemsSummary,
+}) => `
+You are StyleSync's Chief Capsule Wardrobe Architect & Stylist.
+Analyze the user's current wardrobe distribution to identify missing foundational capsule pieces and high-impact wardrobe gaps.
+
+### USER PROFILE:
+- Gender: ${gender || 'Unspecified'}
+- Style Archetype: ${styleArchetype || 'Smart Casual'}
+- Skin Undertone: ${userTraits.skinUndertone || 'Warm Golden'}
+- Color Season: ${userTraits.colorSeason || 'Deep Autumn'}
+- Body Silhouette: ${userTraits.bodySilhouette || userTraits.bodyType || 'Athletic'}
+
+### CURRENT WARDROBE DISTRIBUTION:
+- Category Counts: ${JSON.stringify(wardrobeCategoryCounts)}
+- Existing Items: ${JSON.stringify(wardrobeItemsSummary)}
+
+### TASK:
+1. Identify 2-4 high-priority missing capsule essentials that would unlock the highest number of versatile outfit combinations.
+2. For each gap item, calculate how many outfits it would unlock (unlocksOutfitsCount), explain why it's missing, provide realistic Indian Rupee (₹) price range, and generate 1-2 curated pick recommendations with realistic image URLs from Unsplash.
+
+Return ONLY a raw JSON object with this exact schema:
+{
+  "missingCategories": ["Shoes", "Outerwear"],
+  "gaps": [
+    {
+      "id": "gap_sneaker_01",
+      "title": "Minimalist White Leather Low-Top Sneaker",
+      "category": "Shoes",
+      "priority": "High",
+      "unlocksOutfitsCount": 14,
+      "reason": "The single most versatile footwear piece. Bridges your chinos and denim with casual tees and structured blazers.",
+      "missingRole": "Universal smart-casual footwear foundation",
+      "priceRange": "₹2,500 – ₹6,000",
+      "curatedPicks": [
+        {
+          "name": "Stan Smith Leather",
+          "brand": "Adidas Originals",
+          "price": 4999,
+          "image": "https://images.unsplash.com/photo-1549298916-b41d501d3772?w=500&auto=format&fit=crop&q=80"
+        }
+      ]
+    }
+  ]
+}
+`;
+

@@ -40,9 +40,13 @@ const purchaseSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    currency: {
+      type: String,
+      default: '₹',
+    },
     feedback: {
       type: String,
-      enum: ['good', 'bad', 'pending'],
+      enum: ['good', 'bad', 'pending', null],
       default: 'pending',
     },
     rating: {
@@ -51,6 +55,10 @@ const purchaseSchema = new mongoose.Schema(
       max: 5,
       default: 5,
     },
+    date: {
+      type: Date,
+      default: Date.now,
+    },
     purchasedAt: {
       type: Date,
       default: Date.now,
@@ -58,7 +66,18 @@ const purchaseSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 );
 
+// Virtuals for spec naming compatibility
+purchaseSchema.virtual('userFeedback').get(function () {
+  return this.feedback;
+});
+purchaseSchema.virtual('userRating').get(function () {
+  return this.rating;
+});
+
 export const Purchase = mongoose.model('Purchase', purchaseSchema);
+

@@ -50,6 +50,12 @@ export const recordPurchase = async (req, res, next) => {
       brand = '',
       buyWiseScore = 85,
       notes = '',
+      currency = '₹',
+      date,
+      feedback,
+      userFeedback,
+      rating,
+      userRating,
       image,
       imageUrl: directImageUrl,
     } = req.body;
@@ -70,16 +76,22 @@ export const recordPurchase = async (req, res, next) => {
       );
     }
 
+    const purchaseDate = date ? new Date(date) : new Date();
+
     const purchase = await Purchase.create({
       userId: req.user.id,
       productName,
       price: Number(price),
+      currency: currency || '₹',
       category,
       brand,
       buyWiseScore: Number(buyWiseScore),
       notes,
+      feedback: userFeedback || feedback || 'pending',
+      rating: userRating !== undefined ? Number(userRating) : rating !== undefined ? Number(rating) : 5,
       imageUrl: finalImageUrl,
-      purchasedAt: new Date(),
+      date: purchaseDate,
+      purchasedAt: purchaseDate,
     });
 
     // Optionally update user budget spent for the current month
@@ -110,9 +122,12 @@ export const recordPurchase = async (req, res, next) => {
  */
 export const updateFeedback = async (req, res, next) => {
   try {
-    const { feedback, rating } = req.body;
+    const { feedback, userFeedback, rating, userRating } = req.body;
 
-    if (!feedback && rating === undefined) {
+    const finalFeedback = userFeedback !== undefined ? userFeedback : feedback;
+    const finalRating = userRating !== undefined ? userRating : rating;
+
+    if (!finalFeedback && finalRating === undefined) {
       return res.status(400).json({
         success: false,
         message: 'Please provide feedback ("good" | "bad") or rating (1-5)',
@@ -131,8 +146,8 @@ export const updateFeedback = async (req, res, next) => {
       });
     }
 
-    if (feedback) purchase.feedback = feedback;
-    if (rating !== undefined) purchase.rating = Number(rating);
+    if (finalFeedback !== undefined) purchase.feedback = finalFeedback;
+    if (finalRating !== undefined) purchase.rating = Number(finalRating);
 
     await purchase.save();
 
@@ -145,3 +160,32 @@ export const updateFeedback = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * @desc    Delete purchase record
+ * @route   DELETE /api/v1/purchases/:id
+ * @access  Private
+ */
+export const deletePurchase = async (req, res, next) => {
+  try {
+    const purchase = await Purchase.findOneAndDelete({
+      _id: req.params.id,
+      userId: req.user.id,
+    });
+
+    if (!purchase) {
+      return res.status(404).json({
+        success: false,
+        message: 'Purchase record not found',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Purchase deleted.',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

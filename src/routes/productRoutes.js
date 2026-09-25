@@ -6,6 +6,7 @@ import {
   parseProductUrl,
   compareProducts,
   completeTheLook,
+  deleteProduct,
 } from '../controllers/productController.js';
 import { protect } from '../middlewares/authMiddleware.js';
 import { upload } from '../middlewares/uploadMiddleware.js';
@@ -20,5 +21,7 @@ router.post('/:id/complete-the-look', completeTheLook);
 router.post('/analyze', upload.any(), analyzeProduct);
 router.get('/', getAnalyzedProducts);
 router.get('/:id', getProductById);
+router.delete('/:id', deleteProduct);
 
 export default router;
+

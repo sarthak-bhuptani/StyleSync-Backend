@@ -181,6 +181,28 @@ paths:
         200:
           description: Reset link dispatched
 
+  /api/v1/auth/reset-password:
+    post:
+      summary: Reset Password Completion
+      description: Reset password using the reset token sent to email.
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token: { type: string, example: "9f82ab..." }
+                password: { type: string, example: "newSecurePassword123!" }
+      responses:
+        200:
+          description: Password updated successfully
+        400:
+          description: Invalid or expired token
+
+
   # PROFILE & AI CALIBRATION
   /api/v1/profile:
     get:
@@ -258,6 +280,18 @@ paths:
       responses:
         200:
           description: AI Vision calibration result with physical traits and styling notes
+
+  /api/v1/profile/color-draping:
+    get:
+      summary: Digital Color Draping Studio Palette
+      description: Get tailored seasonal color swatches (power colors, neutrals, and avoid colors) based on skin undertone and color season.
+      security:
+        - BearerAuth: []
+      tags: [profile]
+      responses:
+        200:
+          description: Seasonal draping insights and curated color swatches
+
 
   # CAPSULE WARDROBE
   /api/v1/wardrobe:
@@ -436,6 +470,100 @@ paths:
         200:
           description: Product evaluation details
 
+    delete:
+      summary: Delete Analyzed Product History
+      description: Removes product from evaluation history.
+      security:
+        - BearerAuth: []
+      tags: [product-advisor]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        200:
+          description: Product removed from analysis history
+
+  /api/v1/products/parse-url:
+    post:
+      summary: Scrape and Parse Product Webpage URL
+      description: Extracts product title, price, brand, and main image from an e-commerce product link.
+      security:
+        - BearerAuth: []
+      tags: [product-advisor]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, example: "https://www.zara.com/in/en/merino-sweater-p12345.html" }
+      responses:
+        200:
+          description: Parsed product attributes
+
+  /api/v1/products/{id}/complete-the-look:
+    post:
+      summary: Complete the Look & Cost-Per-Wear Generation
+      description: Generates 3 full outfit combinations and Cost-Per-Wear breakdown for a candidate item using user wardrobe.
+      security:
+        - BearerAuth: []
+      tags: [product-advisor]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                productData: { type: object }
+      responses:
+        200:
+          description: 3 styled outfits and cost-per-wear analysis
+
+  /api/v1/products/compare:
+    post:
+      summary: Compare 2+ Products Side-by-Side
+      description: Head-to-head AI duel analysis comparing candidate clothing items against wardrobe synergy and cost-per-wear.
+      security:
+        - BearerAuth: []
+      tags: [product-advisor]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                productIds:
+                  type: array
+                  items: { type: string }
+                  example: ["prod_101", "prod_102"]
+                itemA: { type: object }
+                itemB: { type: object }
+      responses:
+        200:
+          description: Side-by-side comparison winner and metrics
+
+
+  # CAPSULE GAPS RECOMMENDATIONS
+  /api/v1/recommendations/gaps:
+    get:
+      summary: Detect Missing Capsule Wardrobe Essentials (Gap Engine)
+      description: Inspects wardrobe category distribution and identifies missing essentials to unlock maximum versatile outfits.
+      security:
+        - BearerAuth: []
+      tags: [recommendations]
+      responses:
+        200:
+          description: Prioritized missing wardrobe categories and curated pick recommendations
+
   # AI OUTFIT BUILDER
   /api/v1/outfits:
     get:
@@ -447,6 +575,58 @@ paths:
       responses:
         200:
           description: List of saved outfits
+    post:
+      summary: Save Custom Outfit to Lookbook
+      description: Save a customized or curated outfit with item IDs to database.
+      security:
+        - BearerAuth: []
+      tags: [outfit-builder]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [itemIds]
+              properties:
+                title: { type: string, example: "Smart Friday Ensemble" }
+                occasion: { type: string, example: "Smart Casual" }
+                weather: { type: string, example: "Mild" }
+                style: { type: string, example: "Smart Casual" }
+                itemIds:
+                  type: array
+                  items: { type: string }
+      responses:
+        201:
+          description: Outfit saved successfully
+
+  /api/v1/outfits/wear-logs:
+    get:
+      summary: Get Daily Outfit Wear History Logs
+      description: Returns chronological log of daily worn outfits with populated clothing items from database.
+      security:
+        - BearerAuth: []
+      tags: [outfit-builder]
+      responses:
+        200:
+          description: List of daily worn outfit records
+
+  /api/v1/outfits/{id}:
+    delete:
+      summary: Delete Saved Outfit
+      description: Removes outfit from user lookbook.
+      security:
+        - BearerAuth: []
+      tags: [outfit-builder]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        200:
+          description: Outfit removed from lookbook
+
 
   /api/v1/outfits/generate:
     post:
@@ -467,6 +647,33 @@ paths:
       responses:
         201:
           description: Outfit generated successfully with match score and reasoning
+
+  /api/v1/outfits/log-wear:
+    post:
+      summary: Log Today's Worn Outfit (Increments Wear Counts)
+      description: Logs an outfit wear for today and increments usage/wear count on each piece for cost-per-wear tracking.
+      security:
+        - BearerAuth: []
+      tags: [outfit-builder]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [itemIds]
+              properties:
+                outfitTitle: { type: string, example: "The Effortless Office Essential" }
+                occasion: { type: string, example: "Office / Work" }
+                date: { type: string, example: "2026-09-25" }
+                temp: { type: string, example: "28°C Sunny" }
+                itemIds:
+                  type: array
+                  items: { type: string }
+                  example: ["wb_1", "wb_2", "wb_3"]
+      responses:
+        200:
+          description: Outfit logged and item usage counts updated
 
   # PURCHASES & FEEDBACK LOOP
   /api/v1/purchases:
@@ -514,6 +721,22 @@ paths:
         201:
           description: Purchase recorded successfully
 
+  /api/v1/purchases/{id}:
+    delete:
+      summary: Delete Purchase Record
+      description: Removes recorded purchase from history.
+      security:
+        - BearerAuth: []
+      tags: [purchases]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        200:
+          description: Purchase deleted
+
   /api/v1/purchases/{id}/feedback:
     patch:
       summary: Update Purchase Feedback & Rating
@@ -537,6 +760,7 @@ paths:
       responses:
         200:
           description: Feedback updated and memory refined
+
 
   # SHOPPING BUDGET
   /api/v1/budget:
@@ -576,6 +800,31 @@ paths:
         200:
           description: Budget limits updated
 
+  /api/v1/budget/expense:
+    post:
+      summary: Record Clothing Purchase Expense
+      description: Adds a clothing purchase expense directly into monthly budget tracking and purchase ledger.
+      security:
+        - BearerAuth: []
+      tags: [budget]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, category]
+              properties:
+                amount: { type: number, example: 2990 }
+                category: { type: string, example: "Tops" }
+                productName: { type: string, example: "Merino Wool Knit" }
+                brand: { type: string, example: "Uniqlo" }
+                notes: { type: string }
+      responses:
+        201:
+          description: Expense added to monthly budget tracking
+
+
   # AI CHAT ASSISTANT
   /api/v1/chat/message:
     post:
@@ -602,3 +851,135 @@ paths:
       responses:
         200:
           description: AI Stylist advice reply
+
+  # NOTIFICATIONS & WEB PUSH
+  /api/v1/notifications/vapid-key:
+    get:
+      summary: Get VAPID Public Key
+      description: Returns public key used by browser service worker to generate push subscription.
+      tags: [notifications]
+      responses:
+        200:
+          description: VAPID Public key
+
+  /api/v1/notifications/subscribe:
+    post:
+      summary: Register Device Push Subscription
+      description: Stores browser push subscription endpoint and encryption keys for background notifications.
+      security:
+        - BearerAuth: []
+      tags: [notifications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endpoint, keys]
+              properties:
+                endpoint: { type: string }
+                keys:
+                  type: object
+                  properties:
+                    p256dh: { type: string }
+                    auth: { type: string }
+      responses:
+        201:
+          description: Subscribed successfully
+
+  /api/v1/notifications/unsubscribe:
+    post:
+      summary: Unsubscribe Device from Push Notifications
+      security:
+        - BearerAuth: []
+      tags: [notifications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endpoint]
+              properties:
+                endpoint: { type: string }
+      responses:
+        200:
+          description: Unsubscribed
+
+  /api/v1/notifications:
+    get:
+      summary: Get Notification Feed & History
+      description: Returns list of notifications and unread count.
+      security:
+        - BearerAuth: []
+      tags: [notifications]
+      parameters:
+        - in: query
+          name: isRead
+          schema: { type: boolean }
+      responses:
+        200:
+          description: Notification feed list
+
+  /api/v1/notifications/read-all:
+    patch:
+      summary: Mark All Notifications as Read
+      security:
+        - BearerAuth: []
+      tags: [notifications]
+      responses:
+        200:
+          description: All notifications marked as read
+
+  /api/v1/notifications/{id}/read:
+    patch:
+      summary: Mark Single Notification as Read
+      security:
+        - BearerAuth: []
+      tags: [notifications]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        200:
+          description: Notification marked as read
+
+  /api/v1/notifications/{id}:
+    delete:
+      summary: Delete Notification
+      security:
+        - BearerAuth: []
+      tags: [notifications]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        200:
+          description: Notification removed
+
+  /api/v1/notifications/test-send:
+    post:
+      summary: Dispatch Test Push Notification to Current User
+      description: Triggers a test push notification to verify background & foreground handling.
+      security:
+        - BearerAuth: []
+      tags: [notifications]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                body: { type: string }
+                type: { type: string }
+                url: { type: string }
+      responses:
+        200:
+          description: Test notification dispatched
+
+
