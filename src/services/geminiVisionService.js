@@ -608,6 +608,141 @@ export const detectWardrobeGapsWithGemini = async ({
 };
 
 /**
+ * Normalizes any apparel category, name, or subcategory into the strict StyleSync enum:
+ * 'Tops' | 'Bottoms' | 'Outerwear' | 'Shoes' | 'Accessories' | 'Eyewear' | 'One-Piece' | 'Other'
+ */
+export const normalizeWardrobeCategory = (rawCategory = '', rawName = '', subcategory = '') => {
+  const text = `${rawCategory} ${rawName} ${subcategory}`.toLowerCase().trim();
+
+  // 1. Bottoms (Pants, Jeans, Trousers, Chinos, Shorts, Joggers, Skirts, Cargo, Sweatpants)
+  if (
+    text.includes('pant') ||
+    text.includes('jean') ||
+    text.includes('trouser') ||
+    text.includes('chino') ||
+    text.includes('bottom') ||
+    text.includes('short') ||
+    text.includes('jogger') ||
+    text.includes('cargo') ||
+    text.includes('skirt') ||
+    text.includes('sweatpant') ||
+    text.includes('trackpant') ||
+    text.includes('legging') ||
+    (text.includes('denim') && !text.includes('jacket') && !text.includes('shirt'))
+  ) {
+    return 'Bottoms';
+  }
+
+  // 2. Shoes / Footwear (Sneakers, Boots, Loafers, Oxfords, Sandals, Heels, Slides, Trainers, Mules, Clogs, Flats, Brogues, Slippers)
+  if (
+    text.includes('shoe') ||
+    text.includes('sneaker') ||
+    text.includes('boot') ||
+    text.includes('loafer') ||
+    (text.includes('oxford') && !text.includes('shirt')) ||
+    text.includes('derby') ||
+    text.includes('sandal') ||
+    text.includes('heel') ||
+    text.includes('slide') ||
+    text.includes('footwear') ||
+    text.includes('trainer') ||
+    text.includes('brogue') ||
+    text.includes('mule') ||
+    text.includes('clog') ||
+    text.includes('flat') ||
+    text.includes('pump') ||
+    text.includes('slipper') ||
+    text.includes('espadrille') ||
+    text.includes('chelsea') ||
+    text.includes('kicks')
+  ) {
+    return 'Shoes';
+  }
+
+  // 3. Outerwear (Jackets, Coats, Blazers, Trench, Cardigan, Bomber, Vest)
+  if (
+    text.includes('jacket') ||
+    text.includes('coat') ||
+    text.includes('blazer') ||
+    text.includes('cardigan') ||
+    text.includes('bomber') ||
+    text.includes('trench') ||
+    text.includes('parka') ||
+    text.includes('outerwear') ||
+    text.includes('vest') ||
+    text.includes('windbreaker') ||
+    text.includes('overcoat')
+  ) {
+    return 'Outerwear';
+  }
+
+  // 4. Eyewear
+  if (
+    text.includes('sunglass') ||
+    text.includes('glass') ||
+    text.includes('eyewear') ||
+    text.includes('shade') ||
+    text.includes('goggle') ||
+    text.includes('frame')
+  ) {
+    return 'Eyewear';
+  }
+
+  // 5. One-Piece
+  if (
+    text.includes('dress') ||
+    text.includes('jumpsuit') ||
+    text.includes('romper') ||
+    text.includes('one-piece') ||
+    text.includes('one piece') ||
+    text.includes('gown')
+  ) {
+    return 'One-Piece';
+  }
+
+  // 6. Accessories
+  if (
+    text.includes('belt') ||
+    text.includes('watch') ||
+    text.includes('tie') ||
+    text.includes('cap') ||
+    text.includes('hat') ||
+    text.includes('scarf') ||
+    text.includes('bag') ||
+    text.includes('backpack') ||
+    text.includes('wallet') ||
+    text.includes('accessory') ||
+    text.includes('accessories') ||
+    text.includes('jewelry')
+  ) {
+    return 'Accessories';
+  }
+
+  // 7. Tops (Shirts, T-shirts, Polo, Sweaters, Hoodies, Tees, Tops, Flannel)
+  if (
+    text.includes('shirt') ||
+    text.includes('tshirt') ||
+    text.includes('t-shirt') ||
+    text.includes('tee') ||
+    text.includes('top') ||
+    text.includes('polo') ||
+    text.includes('sweater') ||
+    text.includes('hoodie') ||
+    text.includes('sweatshirt') ||
+    text.includes('flannel') ||
+    text.includes('henley') ||
+    text.includes('tank') ||
+    text.includes('blouse')
+  ) {
+    return 'Tops';
+  }
+
+  const validCategories = ['Tops', 'Bottoms', 'Outerwear', 'Shoes', 'Accessories', 'Eyewear', 'One-Piece', 'Other'];
+  const match = validCategories.find((c) => c.toLowerCase() === rawCategory.toLowerCase());
+  return match || 'Tops';
+};
+
+/**
  * Auto-analyze uploaded wardrobe clothing item using Gemini Vision (shirt, pants, shoes, color, hex, etc.)
  */
 export const analyzeWardrobeItemWithGemini = async (imageBuffer, mimeType = 'image/jpeg') => {
@@ -623,11 +758,12 @@ export const analyzeWardrobeItemWithGemini = async (imageBuffer, mimeType = 'ima
       const text = response.text();
       const parsed = safeJsonParse(text);
 
-      // Validate/normalize category to schema enum
-      const validCategories = ['Tops', 'Bottoms', 'Outerwear', 'Shoes', 'Accessories', 'Eyewear', 'One-Piece', 'Other'];
-      if (!validCategories.includes(parsed.category)) {
-        parsed.category = 'Other';
-      }
+      // Normalize category with high precision (e.g. pants -> Bottoms, shirt -> Tops)
+      parsed.category = normalizeWardrobeCategory(
+        parsed.category,
+        parsed.name,
+        parsed.subcategory
+      );
 
       // Ensure colorHex has '#'
       if (parsed.colorHex && !parsed.colorHex.startsWith('#')) {

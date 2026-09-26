@@ -1,6 +1,9 @@
 import { WardrobeItem } from '../models/WardrobeItem.js';
 import { uploadImage } from '../config/cloudinary.js';
-import { analyzeWardrobeItemWithGemini } from '../services/geminiVisionService.js';
+import {
+  analyzeWardrobeItemWithGemini,
+  normalizeWardrobeCategory,
+} from '../services/geminiVisionService.js';
 
 /**
  * Helper to extract image buffer and URL from request
@@ -76,10 +79,6 @@ export const getWardrobeItems = async (req, res, next) => {
 
     const query = { userId: req.user.id };
 
-    if (category && category !== 'All') {
-      query.category = category;
-    }
-
     if (season) {
       query.season = season;
     }
@@ -96,7 +95,30 @@ export const getWardrobeItems = async (req, res, next) => {
       ];
     }
 
-    const items = await WardrobeItem.find(query).sort({ createdAt: -1 });
+    let items = await WardrobeItem.find(query).sort({ createdAt: -1 });
+
+    // Auto-heal any existing items in the database that had incorrect category tags
+    const updatePromises = [];
+    items = items.map((item) => {
+      const correctCategory = normalizeWardrobeCategory(item.category, item.name, item.subcategory);
+      if (correctCategory !== item.category) {
+        item.category = correctCategory;
+        updatePromises.push(
+          WardrobeItem.findByIdAndUpdate(item._id, { category: correctCategory }).exec()
+        );
+      }
+      return item;
+    });
+
+    if (updatePromises.length > 0) {
+      await Promise.allSettled(updatePromises);
+    }
+
+    // Apply category filter after normalization
+    if (category && category !== 'All') {
+      const targetCategory = normalizeWardrobeCategory(category);
+      items = items.filter((item) => item.category === targetCategory || item.category === category);
+    }
 
     res.status(200).json({
       success: true,
@@ -147,6 +169,14 @@ export const addWardrobeItem = async (req, res, next) => {
       });
     }
 
+    const resolvedName = name || aiResult?.name || 'Wardrobe Item';
+    const resolvedSubcategory = subcategory || aiResult?.subcategory || '';
+    const resolvedCategory = normalizeWardrobeCategory(
+      category || aiResult?.category || 'Tops',
+      resolvedName,
+      resolvedSubcategory
+    );
+
     const parsedTags = Array.isArray(tags)
       ? tags
       : tags
@@ -155,9 +185,9 @@ export const addWardrobeItem = async (req, res, next) => {
 
     const item = await WardrobeItem.create({
       userId: req.user.id,
-      name: name || aiResult?.name || 'Wardrobe Item',
-      category: category || aiResult?.category || 'Tops',
-      subcategory: subcategory || aiResult?.subcategory || '',
+      name: resolvedName,
+      category: resolvedCategory,
+      subcategory: resolvedSubcategory,
       brand: brand || '',
       color: color || aiResult?.color || 'Neutral',
       colorHex: colorHex || aiResult?.colorHex || '#000000',
