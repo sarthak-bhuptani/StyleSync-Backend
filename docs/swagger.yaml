@@ -293,7 +293,56 @@ paths:
           description: Seasonal draping insights and curated color swatches
 
 
-  # CAPSULE WARDROBE
+  # CAPSULE WARDROBE & AI VISION CLASSIFIER
+  /api/v1/wardrobe/analyze:
+    post:
+      summary: Auto-Analyze Wardrobe Item Image with Gemini Vision
+      description: Upload a photo of a clothing item (shirt, pant, shoes, jacket, etc.) to automatically extract name, category, subcategory, primary color, hex code, pattern, fabric, formality, season, and fashion tags.
+      security:
+        - BearerAuth: []
+      tags: [wardrobe]
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: Uploaded garment or accessory photo
+          application/json:
+            schema:
+              type: object
+              properties:
+                imageUrl:
+                  type: string
+                  description: Direct image URL or base64 Data URI
+      responses:
+        200:
+          description: AI classification and color analysis result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      name: { type: string, example: "Navy Blue Oxford Cotton Shirt" }
+                      category: { type: string, example: "Tops" }
+                      subcategory: { type: string, example: "Oxford Shirt" }
+                      color: { type: string, example: "Navy Blue" }
+                      colorHex: { type: string, example: "#1B263B" }
+                      pattern: { type: string, example: "Solid" }
+                      fabric: { type: string, example: "Cotton" }
+                      formality: { type: string, example: "Smart Casual" }
+                      season: { type: string, example: "All-Season" }
+                      tags: { type: array, items: { type: string } }
+                      confidence: { type: string, example: "96%" }
+                      imageUrl: { type: string }
+
   /api/v1/wardrobe:
     get:
       summary: Get Capsule Wardrobe Items

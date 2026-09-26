@@ -422,3 +422,48 @@ Return ONLY a raw JSON object with this exact schema:
 }
 `;
 
+export const WARDROBE_ITEM_ANALYSIS_PROMPT = `
+You are StyleSync's Master AI Fashion Classifier and Color Metrologist.
+Analyze the provided image of a wardrobe/clothing item with extreme computer vision precision.
+
+CRITICAL INSTRUCTIONS:
+1. Identify the exact type of clothing/accessory in the image (shirt, t-shirt, polo, jeans, trousers, chinos, jacket, hoodie, blazer, sneakers, boots, watch, glasses, dress, etc.).
+2. Categorize it into one of the following exact categories:
+   - "Tops" (shirts, t-shirts, polo, tank tops, sweaters, hoodies)
+   - "Bottoms" (jeans, chinos, trousers, shorts, skirts, joggers)
+   - "Outerwear" (jackets, coats, blazers, trench coats, vests)
+   - "Shoes" (sneakers, boots, loafers, oxfords, sandals)
+   - "Accessories" (belts, ties, watches, caps, bags, scarves, jewelry)
+   - "Eyewear" (sunglasses, prescription glasses)
+   - "One-Piece" (dresses, jumpsuits, rompers, suits)
+   - "Other"
+3. Determine:
+   - "name": A clean, descriptive title for the item (e.g. "Navy Blue Oxford Cotton Shirt", "Slim-Fit Black Denim Jeans", "Classic White Leather Low-Top Sneakers", "Olive Green Utility Overshirt")
+   - "subcategory": Specific subcategory name (e.g. "Oxford Shirt", "Crewneck T-Shirt", "Chinos", "Selvedge Denim", "Tailored Blazer", "Bomber Jacket", "Loafers")
+   - "color": Precise primary color name (e.g. "Navy Blue", "Olive Green", "Charcoal Grey", "Burgundy", "Optic White", "Beige", "Mustard Yellow", "Black")
+   - "colorHex": The most accurate 6-character dominant hex code matching the garment (e.g. "#1B263B", "#3E5C46", "#2C3539", "#FFFFFF", "#000000")
+   - "secondaryColors": Array of secondary color names if multicolored or patterned (e.g. ["White", "Red"]) or empty []
+   - "pattern": One of: "Solid", "Striped", "Plaid/Check", "Printed", "Floral", "Textured", "Graphic", "Colorblock", "Other"
+   - "fabric": Estimated primary material (e.g. "Cotton", "Denim", "Linen", "Wool", "Leather", "Silk", "Polyester", "Knit", "Corduroy", "Nylon", "Other")
+   - "formality": One of: "Casual", "Smart Casual", "Formal", "Other"
+   - "season": One of: "All-Season", "Spring/Summer", "Fall/Winter", "Summer", "Winter"
+   - "tags": Array of 3 to 6 descriptive fashion tags (e.g. ["breathable", "smart-casual", "versatile staple", "minimalist", "layering piece"])
+   - "confidence": Estimated classification confidence (e.g. "96%")
+
+Return ONLY a valid, raw JSON object (no markdown code fences, no extra text) with this exact schema:
+{
+  "name": "string",
+  "category": "Tops" | "Bottoms" | "Outerwear" | "Shoes" | "Accessories" | "Eyewear" | "One-Piece" | "Other",
+  "subcategory": "string",
+  "color": "string",
+  "colorHex": "#RRGGBB",
+  "secondaryColors": ["string"],
+  "pattern": "Solid" | "Striped" | "Plaid/Check" | "Printed" | "Floral" | "Textured" | "Graphic" | "Colorblock" | "Other",
+  "fabric": "string",
+  "formality": "Casual" | "Smart Casual" | "Formal" | "Other",
+  "season": "All-Season" | "Spring/Summer" | "Fall/Winter" | "Summer" | "Winter",
+  "tags": ["string"],
+  "confidence": "95%"
+}
+`;
+

@@ -2,6 +2,7 @@ import express from 'express';
 import {
   getWardrobeItems,
   addWardrobeItem,
+  analyzeWardrobeItem,
   updateWardrobeItem,
   deleteWardrobeItem,
 } from '../controllers/wardrobeController.js';
@@ -12,6 +13,8 @@ const router = express.Router();
 
 router.use(protect);
 
+router.post('/analyze', upload.single('image'), analyzeWardrobeItem);
+
 router.route('/')
   .get(getWardrobeItems)
   .post(upload.single('image'), addWardrobeItem);
@@ -21,3 +24,4 @@ router.route('/:id')
   .delete(deleteWardrobeItem);
 
 export default router;
+

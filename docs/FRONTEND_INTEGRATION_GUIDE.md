@@ -98,16 +98,24 @@ const handleAnalyzeProduct = async (imageFile, productInfo) => {
 ```javascript
 import { wardrobeApi } from './api/stylesyncApi';
 
-// Get items
-const wardrobe = await wardrobeApi.getItems('Tops');
+// 1. Auto-analyze clothing photo (extracts shirt/pant/shoes, color, hex, category, tags)
+const analyzeFormData = new FormData();
+analyzeFormData.append('image', imageFile);
 
-// Add item with photo
+const analysis = await wardrobeApi.analyzeItem(analyzeFormData);
+console.log('AI Detected Name:', analysis.data.name);         // e.g. "Navy Blue Oxford Cotton Shirt"
+console.log('Category:', analysis.data.category);              // e.g. "Tops"
+console.log('Detected Color:', analysis.data.color);           // e.g. "Navy Blue"
+console.log('Dominant Hex Code:', analysis.data.colorHex);     // e.g. "#1B263B"
+console.log('Pattern & Fabric:', analysis.data.pattern, analysis.data.fabric);
+console.log('Fashion Tags:', analysis.data.tags);
+
+// 2. Add item (if name/category/color are omitted, backend will auto-detect from image)
 const formData = new FormData();
-formData.append('name', 'Oversized Trench Coat');
-formData.append('category', 'Outerwear');
-formData.append('color', 'Khaki');
-formData.append('price', 220);
 formData.append('image', imageFile);
+// Optional manual overrides:
+formData.append('price', 1999);
+formData.append('brand', 'Uniqlo');
 
 await wardrobeApi.addItem(formData);
 ```
