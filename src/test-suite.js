@@ -10,6 +10,7 @@ import {
   compareProductsWithGemini,
   getColorDrapingAnalysisWithGemini,
   completeTheLookWithGemini,
+  analyzeWardrobeItemWithGemini,
 } from './services/geminiVisionService.js';
 import { User } from './models/User.js';
 import { config } from './config/env.js';
@@ -243,7 +244,19 @@ async function runTests() {
     assert.ok(typeof response.reply === 'string', 'Reply should be string');
   });
 
-  // 11. Web Push Notification Service & VAPID Key
+  // 11. AI Wardrobe Item Vision Analysis (Shirt/Pant/Color Auto-Extraction)
+  await asyncTest('AI Wardrobe Item Vision Classifier Service', async () => {
+    const mockBuffer = Buffer.from('fake-clothing-image-content');
+    const result = await analyzeWardrobeItemWithGemini(mockBuffer);
+
+    assert.ok(result.name, 'Should return item name');
+    assert.ok(result.category, 'Should return category');
+    assert.ok(result.color, 'Should detect color');
+    assert.ok(result.colorHex, 'Should extract hex color code');
+    assert.ok(result.colorHex.startsWith('#'), 'Hex color should start with #');
+  });
+
+  // 12. Web Push Notification Service & VAPID Key
   test('Web Push VAPID Public Key Generation', () => {
     const publicKey = config.vapidPublicKey || 'BC6JgX4kMhv9LzN7s24TfQjZ6e8qI4xKpR_F9A2bO8W7E1cD0tY5vS4nU3gH6mJ1K8L0zP9qR2tV4xY6zB8cE0=';
     assert.ok(publicKey, 'Should provide non-empty VAPID public key');

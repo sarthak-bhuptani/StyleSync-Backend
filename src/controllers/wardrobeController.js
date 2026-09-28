@@ -1,5 +1,72 @@
 import { WardrobeItem } from '../models/WardrobeItem.js';
 import { uploadImage } from '../config/cloudinary.js';
+import {
+  analyzeWardrobeItemWithGemini,
+  normalizeWardrobeCategory,
+} from '../services/geminiVisionService.js';
+
+/**
+ * Helper to extract image buffer and URL from request
+ */
+const extractImageBuffer = async (req) => {
+  let imageBuffer = null;
+  let mimeType = 'image/jpeg';
+  let imageUrl = req.body?.imageUrl || req.body?.image || '';
+
+  if (req.file) {
+    imageBuffer = req.file.buffer;
+    mimeType = req.file.mimetype || 'image/jpeg';
+    imageUrl = await uploadImage(imageBuffer, mimeType, 'stylesync/wardrobe');
+  } else if (imageUrl) {
+    if (imageUrl.startsWith('data:')) {
+      const parts = imageUrl.split(';base64,');
+      mimeType = parts[0].replace('data:', '') || 'image/jpeg';
+      imageBuffer = Buffer.from(parts[1], 'base64');
+    } else if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      try {
+        const imageRes = await fetch(imageUrl);
+        const arrayBuf = await imageRes.arrayBuffer();
+        imageBuffer = Buffer.from(arrayBuf);
+        mimeType = imageRes.headers.get('content-type') || 'image/jpeg';
+      } catch (fetchErr) {
+        console.warn('[extractImageBuffer] Could not download image URL:', fetchErr.message);
+      }
+    }
+  }
+
+  return { imageBuffer, mimeType, imageUrl };
+};
+
+/**
+ * @desc    Analyze uploaded clothing/wardrobe image (auto-detect shirt, pants, color, hex, category, fabric, etc.)
+ * @route   POST /api/v1/wardrobe/analyze
+ * @access  Private
+ */
+export const analyzeWardrobeItem = async (req, res, next) => {
+  try {
+    const { imageBuffer, mimeType, imageUrl } = await extractImageBuffer(req);
+
+    if (!imageBuffer && !imageUrl) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide an image file or imageUrl to analyze the clothing item',
+      });
+    }
+
+    const aiResult = await analyzeWardrobeItemWithGemini(imageBuffer, mimeType);
+
+    res.status(200).json({
+      success: true,
+      message: 'Wardrobe item analyzed successfully',
+      data: {
+        ...aiResult,
+        imageUrl: imageUrl || '',
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 /**
  * @desc    Get user's wardrobe items (with optional ?category= filter)
@@ -11,10 +78,6 @@ export const getWardrobeItems = async (req, res, next) => {
     const { category, search, season, isFavorite } = req.query;
 
     const query = { userId: req.user.id };
-
-    if (category && category !== 'All') {
-      query.category = category;
-    }
 
     if (season) {
       query.season = season;
@@ -32,7 +95,30 @@ export const getWardrobeItems = async (req, res, next) => {
       ];
     }
 
-    const items = await WardrobeItem.find(query).sort({ createdAt: -1 });
+    let items = await WardrobeItem.find(query).sort({ createdAt: -1 });
+
+    // Auto-heal any existing items in the database that had incorrect category tags
+    const updatePromises = [];
+    items = items.map((item) => {
+      const correctCategory = normalizeWardrobeCategory(item.category, item.name, item.subcategory);
+      if (correctCategory !== item.category) {
+        item.category = correctCategory;
+        updatePromises.push(
+          WardrobeItem.findByIdAndUpdate(item._id, { category: correctCategory }).exec()
+        );
+      }
+      return item;
+    });
+
+    if (updatePromises.length > 0) {
+      await Promise.allSettled(updatePromises);
+    }
+
+    // Apply category filter after normalization
+    if (category && category !== 'All') {
+      const targetCategory = normalizeWardrobeCategory(category);
+      items = items.filter((item) => item.category === targetCategory || item.category === category);
+    }
 
     res.status(200).json({
       success: true,
@@ -45,13 +131,13 @@ export const getWardrobeItems = async (req, res, next) => {
 };
 
 /**
- * @desc    Add a new wardrobe item
+ * @desc    Add a new wardrobe item (with optional auto-AI analysis if fields missing)
  * @route   POST /api/v1/wardrobe
  * @access  Private
  */
 export const addWardrobeItem = async (req, res, next) => {
   try {
-    const {
+    let {
       name,
       category,
       subcategory,
@@ -61,46 +147,57 @@ export const addWardrobeItem = async (req, res, next) => {
       price,
       image,
       imageUrl: directImageUrl,
+      fabric,
+      pattern,
+      formality,
       wearCount,
       season,
       tags,
     } = req.body;
 
-    if (!name || !category || !color) {
+    const { imageBuffer, mimeType, imageUrl: finalImageUrl } = await extractImageBuffer(req);
+
+    let aiResult = null;
+
+    // If core fields are missing, attempt automatic AI extraction from the image
+    if ((!name || !category || !color) && (imageBuffer || finalImageUrl)) {
+      aiResult = await analyzeWardrobeItemWithGemini(imageBuffer, mimeType);
+    } else if (!name || !category || !color) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide name, category, and color for the item',
+        message: 'Please provide name, category, and color for the item (or upload an image for automatic detection)',
       });
     }
 
-    let finalImageUrl = directImageUrl || image || '';
-
-    if (req.file) {
-      finalImageUrl = await uploadImage(
-        req.file.buffer,
-        req.file.mimetype,
-        'stylesync/wardrobe'
-      );
-    }
+    const resolvedName = name || aiResult?.name || 'Wardrobe Item';
+    const resolvedSubcategory = subcategory || aiResult?.subcategory || '';
+    const resolvedCategory = normalizeWardrobeCategory(
+      category || aiResult?.category || 'Tops',
+      resolvedName,
+      resolvedSubcategory
+    );
 
     const parsedTags = Array.isArray(tags)
       ? tags
       : tags
       ? tags.split(',').map((t) => t.trim())
-      : [];
+      : (aiResult?.tags || []);
 
     const item = await WardrobeItem.create({
       userId: req.user.id,
-      name,
-      category,
-      subcategory: subcategory || '',
+      name: resolvedName,
+      category: resolvedCategory,
+      subcategory: resolvedSubcategory,
       brand: brand || '',
-      color,
-      colorHex: colorHex || '#000000',
+      color: color || aiResult?.color || 'Neutral',
+      colorHex: colorHex || aiResult?.colorHex || '#000000',
       price: price ? Number(price) : 0,
-      imageUrl: finalImageUrl,
+      imageUrl: finalImageUrl || directImageUrl || image || '',
+      fabric: fabric || aiResult?.fabric || '',
+      pattern: pattern || aiResult?.pattern || 'Solid',
+      formality: formality || aiResult?.formality || 'Smart Casual',
       wearCount: wearCount ? Number(wearCount) : 0,
-      season: season || 'All-Season',
+      season: season || aiResult?.season || 'All-Season',
       tags: parsedTags,
     });
 

@@ -145,7 +145,31 @@ export const wardrobeApi = {
     return handleResponse(res);
   },
 
-  // Add wardrobe item (accepts FormData with file or JSON)
+  // Auto-analyze clothing item image using Gemini Vision (shirt/pant/shoes, color, hex, category)
+  analyzeItem: async (fileOrFormData) => {
+    let body;
+    let isMultipart = false;
+
+    if (fileOrFormData instanceof FormData) {
+      body = fileOrFormData;
+      isMultipart = true;
+    } else if (fileOrFormData instanceof File || fileOrFormData instanceof Blob) {
+      body = new FormData();
+      body.append('image', fileOrFormData);
+      isMultipart = true;
+    } else {
+      body = JSON.stringify(fileOrFormData);
+    }
+
+    const res = await fetch(`${BASE_URL}/wardrobe/analyze`, {
+      method: 'POST',
+      headers: getAuthHeaders(isMultipart),
+      body,
+    });
+    return handleResponse(res);
+  },
+
+  // Add wardrobe item (accepts FormData with file or JSON; auto-infers missing fields from image)
   addItem: async (itemData) => {
     const isMultipart = itemData instanceof FormData;
     const res = await fetch(`${BASE_URL}/wardrobe`, {
