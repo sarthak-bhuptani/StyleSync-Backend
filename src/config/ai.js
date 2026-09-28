@@ -15,18 +15,20 @@ if (config.geminiApiKey) {
 }
 
 export const AVAILABLE_MODELS = [
-  'gemini-flash-lite-latest',
-  'gemini-3.5-flash',
-  'gemini-3.7-flash',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-1.5-pro',
+  'gemini-2.5-flash',
 ];
 
-export const getGeminiModel = (modelName = 'gemini-flash-lite-latest') => {
+export const getGeminiModel = (modelName = 'gemini-2.0-flash') => {
   if (!genAI) return null;
   return genAI.getGenerativeModel({ model: modelName });
 };
 
 /**
- * Execute an AI operation with automatic retry on 503 high-demand spikes
+ * Execute an AI operation with automatic fallback and retry on 503/429 spikes
  */
 export const runWithAiResilience = async (operation) => {
   if (!genAI) {
@@ -41,7 +43,7 @@ export const runWithAiResilience = async (operation) => {
     } catch (err) {
       lastError = err;
       const msg = (err.message || '').toLowerCase();
-      // If error is temporary provider issue (503, 500, 429, 404, high demand, overloaded)
+      // If error is temporary provider issue (503, 500, 429, 404, high demand, overloaded, not found)
       if (
         msg.includes('503') ||
         msg.includes('500') ||
@@ -49,9 +51,13 @@ export const runWithAiResilience = async (operation) => {
         msg.includes('429') ||
         msg.includes('high demand') ||
         msg.includes('unavailable') ||
-        msg.includes('overloaded')
+        msg.includes('overloaded') ||
+        msg.includes('not found') ||
+        msg.includes('fetch failed')
       ) {
-        console.warn(`[AI Engine] ${modelName} temporarily busy. Switching to backup model...`);
+        console.warn(`[AI Engine] Model '${modelName}' encountered transient issue (${err.message}). Switching to backup model...`);
+        // Brief jitter delay before switching model
+        await new Promise((r) => setTimeout(r, 400));
         continue;
       }
       throw err;

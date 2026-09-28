@@ -34,6 +34,7 @@ export const sendMessage = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
+      reply: aiResponse.reply,
       data: {
         reply: aiResponse.reply,
         timestamp: new Date(),
