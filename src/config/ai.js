@@ -15,16 +15,24 @@ if (config.geminiApiKey) {
 }
 
 export const AVAILABLE_MODELS = [
-  'gemini-2.0-flash',
-  'gemini-1.5-flash',
-  'gemini-2.0-flash-lite',
-  'gemini-1.5-pro',
-  'gemini-2.5-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+  'gemini-3.5-flash',
+  'gemini-3.7-flash',
+  'gemini-3.8-flash',
 ];
 
-export const getGeminiModel = (modelName = 'gemini-2.0-flash') => {
+export const getGeminiModel = (modelName = 'gemini-3.5-flash-lite', options = {}) => {
   if (!genAI) return null;
-  return genAI.getGenerativeModel({ model: modelName });
+  return genAI.getGenerativeModel({
+    model: modelName,
+    generationConfig: {
+      maxOutputTokens: 250,
+      temperature: 0.7,
+      ...options.generationConfig,
+    },
+    ...options,
+  });
 };
 
 /**
@@ -38,7 +46,13 @@ export const runWithAiResilience = async (operation) => {
   let lastError = null;
   for (const modelName of AVAILABLE_MODELS) {
     try {
-      const model = genAI.getGenerativeModel({ model: modelName });
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        generationConfig: {
+          maxOutputTokens: 250,
+          temperature: 0.7,
+        },
+      });
       return await operation(model);
     } catch (err) {
       lastError = err;

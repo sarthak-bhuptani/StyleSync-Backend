@@ -228,13 +228,15 @@ export const generateOutfitWithAI = async ({
 };
 
 /**
- * Conversational AI stylist chat
+ * Conversational AI stylist chat (Syncra) with vision support
  */
 export const chatWithAIStylist = async ({
-  user,
+  user = {},
   wardrobeItems = [],
   message,
+  prompt,
   history = [],
+  image,
 }) => {
   return runWithAiResilience(async (model) => {
     const wardrobeSummary = wardrobeItems.map((item) => ({
@@ -244,6 +246,36 @@ export const chatWithAIStylist = async ({
     }));
 
     const systemContext = CHAT_STYLIST_PROMPT({ user, wardrobeSummary });
+    const query = message || prompt || 'Please check this item.';
+
+    if (image) {
+      let base64Data = image;
+      let mimeType = 'image/jpeg';
+      if (typeof image === 'string') {
+        const match = image.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,/);
+        if (match) {
+          mimeType = match[1];
+        }
+        base64Data = image.replace(/^data:image\/\w+;base64,/, '');
+      } else if (Buffer.isBuffer(image)) {
+        base64Data = image.toString('base64');
+      }
+
+      const imagePart = {
+        inlineData: {
+          data: base64Data,
+          mimeType,
+        },
+      };
+
+      const result = await model.generateContent([
+        systemContext,
+        query,
+        imagePart,
+      ]);
+      const response = await result.response;
+      return { reply: response.text() };
+    }
 
     const chat = model.startChat({
       history: [
@@ -255,18 +287,18 @@ export const chatWithAIStylist = async ({
           role: 'model',
           parts: [
             {
-              text: 'Hello! I am your StyleSync AI Stylist. I have your physical profile and capsule wardrobe in mind. How can I help you refine your look today?',
+              text: 'Hey! I am Syncra, your StyleSync AI personal stylist. How can I help you refine your look today?',
             },
           ],
         },
         ...history.map((h) => ({
           role: h.role === 'user' ? 'user' : 'model',
-          parts: [{ text: h.content }],
+          parts: [{ text: h.content || h.text || '' }],
         })),
       ],
     });
 
-    const result = await chat.sendMessage(message);
+    const result = await chat.sendMessage(query);
     const response = await result.response;
     return { reply: response.text() };
   });

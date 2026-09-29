@@ -9,27 +9,25 @@ import { chatWithAIStylist } from '../services/geminiVisionService.js';
  */
 export const sendMessage = async (req, res, next) => {
   try {
-    const { message, history = [] } = req.body;
+    const { message, prompt, history = [], image } = req.body;
+    const query = message || prompt;
 
-    if (!message || !message.trim()) {
+    if (!query && !image) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide a chat message',
+        message: 'Please provide a chat message or image',
       });
     }
 
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    const wardrobeItems = await WardrobeItem.find({ userId: req.user.id });
+    const user = (req.user && req.user.id) ? await User.findById(req.user.id) : null;
+    const wardrobeItems = (req.user && req.user.id) ? await WardrobeItem.find({ userId: req.user.id }) : [];
 
     const aiResponse = await chatWithAIStylist({
-      user,
+      user: user || { name: 'Friend' },
       wardrobeItems,
-      message: message.trim(),
+      message: query ? query.trim() : 'Please evaluate this item or outfit look.',
       history,
+      image,
     });
 
     res.status(200).json({
