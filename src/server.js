@@ -21,6 +21,17 @@ const app = express();
 // Connect to MongoDB
 connectDB();
 
+// Ensure Database is connected before handling requests (vital for cloud & serverless cold-starts)
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+  } catch (err) {
+    // Log but allow unauthenticated/health routes to continue
+    console.warn('[DB Auto-Connect Warning]:', err.message);
+  }
+  next();
+});
+
 // Security Middlewares
 app.use(
   helmet({
