@@ -8,6 +8,7 @@ import swaggerUi from 'swagger-ui-express';
 import YAML from 'yamljs';
 
 import { config } from './config/env.js';
+// Swagger documentation loaded dynamically
 import { connectDB } from './config/db.js';
 import apiRoutes from './routes/index.js';
 import { notFound, errorHandler } from './middlewares/errorHandler.js';
@@ -98,12 +99,14 @@ try {
     res.send(swaggerDocument);
   });
 
-  // Serve Swagger UI at both /docs (FastAPI style) and /api-docs (Express style)
+  // Serve Swagger UI at /swagger, /api-docs (Express style), and /docs (FastAPI style)
+  app.use('/swagger', swaggerUi.serve, swaggerUi.setup(swaggerDocument, swaggerUiOptions));
   app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, swaggerUiOptions));
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, swaggerUiOptions));
 
-  console.log('[Docs] Swagger UI live at: http://localhost:5000/docs');
+  console.log('[Docs] Swagger UI live at: http://localhost:5000/swagger');
   console.log('[Docs] Swagger UI live at: http://localhost:5000/api-docs');
+  console.log('[Docs] Swagger UI live at: http://localhost:5000/docs');
   console.log('[Docs] OpenAPI JSON schema at: http://localhost:5000/openapi.json');
 } catch (err) {
   console.warn('[Docs] Could not load docs/swagger.yaml for Swagger UI:', err.message);

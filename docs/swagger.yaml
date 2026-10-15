@@ -95,6 +95,55 @@ components:
             complexionMatch: { type: string }
             bodyMatch: { type: string }
 
+    Collection:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "col_123"
+        name:
+          type: string
+          example: "Workwear Capsule"
+        category:
+          type: string
+          example: "Work"
+        description:
+          type: string
+          example: "Smart professional staples for Monday-Thursday"
+        coverImage:
+          type: string
+          example: "https://images.unsplash.com/photo-1489987707025-afc232f7ea0f"
+        itemIds:
+          type: array
+          items:
+            type: string
+          example: ["item_1", "item_2"]
+        outfitIds:
+          type: array
+          items:
+            type: string
+          example: ["outfit_1"]
+        looks:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                example: "look_1"
+              title:
+                type: string
+                example: "Boardroom Power Look"
+              items:
+                type: array
+                items:
+                  type: string
+                example: ["item_1", "item_2"]
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-10-15T10:00:00Z"
+
 paths:
   # DEFAULT / HEALTH
   /health:
@@ -260,7 +309,7 @@ paths:
       description: Upload selfie photo to Gemini Vision to detect Face Shape, Skin Undertone, Color Season, and Body Silhouette.
       security:
         - BearerAuth: []
-      tags: [profile]
+      tags: [Style Scanner, profile]
       requestBody:
         content:
           multipart/form-data:
@@ -284,13 +333,182 @@ paths:
   /api/v1/profile/color-draping:
     get:
       summary: Digital Color Draping Studio Palette
-      description: Get tailored seasonal color swatches (power colors, neutrals, and avoid colors) based on skin undertone and color season.
+      description: Returns seasonal color swatches, contrast advice, and color categories (power, neutral, caution) tailored to user's calibrated undertone.
       security:
         - BearerAuth: []
-      tags: [profile]
+      tags: [Style Scanner, profile]
       responses:
         200:
-          description: Seasonal draping insights and curated color swatches
+          description: Seasonal color swatches, contrast advice, and color categories
+
+  # COLLECTIONS & CAPSULE WARDROBES
+  /api/v1/collections:
+    get:
+      summary: Fetch all collections created by the authenticated user
+      description: Returns all capsule collections created by the authenticated user with item counts and looks.
+      security:
+        - BearerAuth: []
+      tags: [Collections]
+      responses:
+        200:
+          description: List of user collections
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Collection'
+    post:
+      summary: Create a new capsule wardrobe collection
+      description: Create a collection with name, category, description, and cover image.
+      security:
+        - BearerAuth: []
+      tags: [Collections]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, example: "Summer Vacation" }
+                category: { type: string, example: "Travel" }
+                description: { type: string, example: "Linen and shorts" }
+                coverImage: { type: string, example: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e" }
+      responses:
+        201:
+          description: Returns the created collection object
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    $ref: '#/components/schemas/Collection'
+
+  /api/v1/collections/{id}:
+    get:
+      summary: Get collection by ID with populated items and outfits
+      description: Fetch specific collection by ID with populated items and outfits.
+      security:
+        - BearerAuth: []
+      tags: [Collections]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        200:
+          description: Collection details with populated items and outfits
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    $ref: '#/components/schemas/Collection'
+        404:
+          description: Collection not found
+    put:
+      summary: Update collection details
+      description: Update name, description, category, or cover image of an existing collection.
+      security:
+        - BearerAuth: []
+      tags: [Collections]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, example: "Workwear Capsule - Updated" }
+                description: { type: string, example: "Curated monochrome workwear" }
+                category: { type: string, example: "Work" }
+                coverImage: { type: string, example: "https://images.unsplash.com/photo-1489987707025-afc232f7ea0f" }
+      responses:
+        200:
+          description: Updated collection object
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    $ref: '#/components/schemas/Collection'
+    delete:
+      summary: Delete a collection
+      description: Permanently remove collection from user capsule wardrobes.
+      security:
+        - BearerAuth: []
+      tags: [Collections]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        200:
+          description: Collection deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Collection deleted" }
+
+  /api/v1/collections/{id}/items:
+    post:
+      summary: Add items or outfits to collection
+      description: Add wardrobe items and outfits to a collection.
+      security:
+        - BearerAuth: []
+      tags: [Collections]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                itemIds:
+                  type: array
+                  items: { type: string }
+                  example: ["item_1", "item_2"]
+                outfitIds:
+                  type: array
+                  items: { type: string }
+                  example: []
+      responses:
+        200:
+          description: Updated collection object with new items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    $ref: '#/components/schemas/Collection'
 
 
   # CAPSULE WARDROBE & AI VISION CLASSIFIER
@@ -556,26 +774,48 @@ paths:
 
   /api/v1/products/{id}/complete-the-look:
     post:
-      summary: Complete the Look & Cost-Per-Wear Generation
-      description: Generates 3 full outfit combinations and Cost-Per-Wear breakdown for a candidate item using user wardrobe.
+      summary: Product Advisor & Complete The Look
+      description: Evaluates a product and pairs it with matching items from the user's wardrobe to create 2-3 outfit combinations.
       security:
         - BearerAuth: []
-      tags: [product-advisor]
+      tags: [Products, product-advisor]
       parameters:
         - in: path
           name: id
           required: true
           schema: { type: string }
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               type: object
               properties:
-                productData: { type: object }
+                productData:
+                  type: object
+                  properties:
+                    name: { type: string, example: "Camp Collar Linen Shirt" }
+                    category: { type: string, example: "Tops" }
+                    price: { type: number, example: 1499 }
       responses:
         200:
-          description: 3 styled outfits and cost-per-wear analysis
+          description: Matching wardrobe items and cost-per-wear look breakdown
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      matchingWardrobeItems:
+                        type: array
+                        items: { type: string }
+                        example: ["item_1", "item_4"]
+                      lookName: { type: string, example: "Smart Weekend Casual" }
+                      estimatedWears: { type: number, example: 45 }
+                      costPerWear: { type: number, example: 33.3 }
 
   /api/v1/products/compare:
     post:
@@ -601,26 +841,51 @@ paths:
           description: Side-by-side comparison winner and metrics
 
 
-  # CAPSULE GAPS RECOMMENDATIONS
   /api/v1/recommendations/gaps:
     get:
-      summary: Detect Missing Capsule Wardrobe Essentials (Gap Engine)
-      description: Inspects wardrobe category distribution and identifies missing essentials to unlock maximum versatile outfits.
+      summary: Dedicated Wardrobe Gap Analysis
+      description: Automatically inspects user's current wardrobe items (tops, bottoms, shoes, layers) and identifies the top 4 missing capsule pieces with budget-friendly picks (₹499 - ₹1,799).
       security:
         - BearerAuth: []
-      tags: [recommendations]
+      tags: [Recommendations, recommendations]
       responses:
         200:
-          description: Prioritized missing wardrobe categories and curated pick recommendations
+          description: Top missing capsule pieces with curated budget picks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, example: "gap_1" }
+                        title: { type: string, example: "Minimalist Clean White Low-Tops" }
+                        category: { type: string, example: "Footwear Staple" }
+                        multiplier: { type: string, example: "+10 Outfits" }
+                        reason: { type: string, example: "Unlocks versatile styling across casual chinos and dark jeans." }
+                        priceRange: { type: string, example: "₹799 – ₹1,499" }
+                        image: { type: string, example: "https://images.unsplash.com/photo-1549298916-b41d501d3772" }
+                        curatedPicks:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              name: { type: string, example: "Classic Low-Top Sneaker" }
+                              brand: { type: string, example: "Red Tape" }
+                              price: { type: number, example: 1199 }
 
-  # AI OUTFIT BUILDER
+  # AI OUTFIT BUILDER & DAILY STYLIST
   /api/v1/outfits:
     get:
       summary: Get Saved Outfits
       description: Returns user saved coordinated outfits.
       security:
         - BearerAuth: []
-      tags: [outfit-builder]
+      tags: [Outfits, outfit-builder]
       responses:
         200:
           description: List of saved outfits
@@ -629,7 +894,7 @@ paths:
       description: Save a customized or curated outfit with item IDs to database.
       security:
         - BearerAuth: []
-      tags: [outfit-builder]
+      tags: [Outfits, outfit-builder]
       requestBody:
         required: true
         content:
@@ -652,13 +917,33 @@ paths:
   /api/v1/outfits/wear-logs:
     get:
       summary: Get Daily Outfit Wear History Logs
-      description: Returns chronological log of daily worn outfits with populated clothing items from database.
+      description: Wear history timeline for cost-per-wear tracking. Returns chronological wear events.
       security:
         - BearerAuth: []
-      tags: [outfit-builder]
+      tags: [Outfits, outfit-builder]
       responses:
         200:
-          description: List of daily worn outfit records
+          description: Array of wear events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  count: { type: number, example: 5 }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id: { type: string, example: "wear_101" }
+                        outfitTitle: { type: string, example: "Boardroom Power Look" }
+                        occasion: { type: string, example: "Work / Smart" }
+                        date: { type: string, example: "2026-10-15" }
+                        temp: { type: string, example: "24°C Partly Cloudy" }
+                        items:
+                          type: array
+                          items: { type: string }
 
   /api/v1/outfits/{id}:
     delete:
@@ -666,7 +951,7 @@ paths:
       description: Removes outfit from user lookbook.
       security:
         - BearerAuth: []
-      tags: [outfit-builder]
+      tags: [Outfits, outfit-builder]
       parameters:
         - in: path
           name: id
@@ -676,99 +961,141 @@ paths:
         200:
           description: Outfit removed from lookbook
 
-
   /api/v1/outfits/generate:
     post:
-      summary: Generate 4-Piece Outfit from Wardrobe
-      description: AI coordinates a 4-piece outfit from user actual database wardrobe items matching occasion, weather, and style.
+      summary: Daily Stylist - Generate Complete Outfit
+      description: Generates a complete 3-4 piece outfit from user's wardrobe matching weather and occasion.
       security:
         - BearerAuth: []
-      tags: [outfit-builder]
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                occasion: { type: string, example: "Date Night" }
-                weather: { type: string, example: "Mild (15-22°C)" }
-                style: { type: string, example: "Smart Casual" }
-      responses:
-        201:
-          description: Outfit generated successfully with match score and reasoning
-
-  /api/v1/outfits/log-wear:
-    post:
-      summary: Log Today's Worn Outfit (Increments Wear Counts)
-      description: Logs an outfit wear for today and increments usage/wear count on each piece for cost-per-wear tracking.
-      security:
-        - BearerAuth: []
-      tags: [outfit-builder]
+      tags: [Outfits, outfit-builder]
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [itemIds]
               properties:
-                outfitTitle: { type: string, example: "The Effortless Office Essential" }
-                occasion: { type: string, example: "Office / Work" }
-                date: { type: string, example: "2026-09-25" }
-                temp: { type: string, example: "28°C Sunny" }
+                occasion: { type: string, example: "Work / Smart" }
+                weather: { type: string, example: "24°C Partly Cloudy" }
+                style: { type: string, example: "Smart Casual" }
+      responses:
+        200:
+          description: Returns generated outfit with item IDs, match score, and styling rationale
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  id: { type: string, example: "out_101" }
+                  name: { type: string, example: "Smart Casual for Work / Smart" }
+                  matchScore: { type: number, example: 92 }
+                  itemIds:
+                    type: array
+                    items: { type: string }
+                    example: ["item_1", "item_2", "item_3"]
+                  stylingRationale: { type: string, example: "Structured tailored lines balance your athletic build." }
+
+  /api/v1/outfits/log-wear:
+    post:
+      summary: Outfit Wear Logging
+      description: Increments the wearCount of every item included in the outfit and logs the wear timestamp.
+      security:
+        - BearerAuth: []
+      tags: [Outfits, outfit-builder]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                outfitId: { type: string, example: "out_101" }
                 itemIds:
                   type: array
                   items: { type: string }
-                  example: ["wb_1", "wb_2", "wb_3"]
+                  example: ["item_1", "item_2", "item_3"]
+                date: { type: string, example: "2026-10-15" }
       responses:
         200:
-          description: Outfit logged and item usage counts updated
+          description: Logged wear successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Logged wear successfully" }
 
-  # PURCHASES & FEEDBACK LOOP
+  # PURCHASES & CPW TRACKING
   /api/v1/purchases:
     get:
-      summary: Get Purchase Ledger & Metrics
-      description: Returns purchase history, total spent amount, and average StyleSync score.
+      summary: Purchase History & CPW Tracking
+      description: Fetch all recorded clothing purchases with cost-per-wear and feedback.
       security:
         - BearerAuth: []
-      tags: [purchases]
+      tags: [Purchases, purchases]
       responses:
         200:
-          description: Purchase ledger and analytics
+          description: Purchase history and CPW metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, example: "pur_101" }
+                        name: { type: string, example: "Linen Camp Collar Shirt" }
+                        brand: { type: string, example: "Snitch" }
+                        category: { type: string, example: "Tops" }
+                        price: { type: number, example: 1299 }
+                        currency: { type: string, example: "₹" }
+                        date: { type: string, example: "2026-09-18" }
+                        imageUrl: { type: string, example: "https://images.unsplash.com/photo-1596755094514-f87e34085b2c" }
+                        wearCount: { type: number, example: 14 }
+                        costPerWear: { type: number, example: 92.7 }
+                        userRating: { type: number, example: 5 }
+                        userFeedback: { type: string, example: "Super breathable, great fit" }
     post:
       summary: Record New Purchase
-      description: Logs a purchase to track budget spending and initiate styling feedback loop.
+      description: Logs a new clothing purchase to track budget spending and cost-per-wear.
       security:
         - BearerAuth: []
-      tags: [purchases]
+      tags: [Purchases, purchases]
       requestBody:
+        required: true
         content:
           multipart/form-data:
             schema:
               type: object
-              required: [productName, price]
+              required: [name, price]
               properties:
-                productName: { type: string, example: "Merino Wool Crewneck" }
-                price: { type: number, example: 110 }
+                name: { type: string, example: "Linen Camp Collar Shirt" }
+                price: { type: number, example: 1299 }
                 category: { type: string, example: "Tops" }
-                brand: { type: string, example: "COS" }
-                buyWiseScore: { type: number, example: 92 }
-                notes: { type: string }
+                brand: { type: string, example: "Snitch" }
+                imageUrl: { type: string }
+                date: { type: string, example: "2026-10-15" }
                 image: { type: string, format: binary }
           application/json:
             schema:
               type: object
-              required: [productName, price]
+              required: [name, price]
               properties:
-                productName: { type: string }
-                price: { type: number }
-                category: { type: string }
-                brand: { type: string }
-                buyWiseScore: { type: number }
-                notes: { type: string }
+                name: { type: string, example: "Linen Camp Collar Shirt" }
+                brand: { type: string, example: "Snitch" }
+                category: { type: string, example: "Tops" }
+                price: { type: number, example: 1299 }
+                imageUrl: { type: string, example: "https://images.unsplash.com/photo-1596755094514-f87e34085b2c" }
+                date: { type: string, example: "2026-10-15" }
       responses:
         201:
-          description: Purchase recorded successfully
+          description: Returns the created purchase object
 
   /api/v1/purchases/{id}:
     delete:
@@ -776,7 +1103,7 @@ paths:
       description: Removes recorded purchase from history.
       security:
         - BearerAuth: []
-      tags: [purchases]
+      tags: [Purchases, purchases]
       parameters:
         - in: path
           name: id
@@ -784,94 +1111,122 @@ paths:
           schema: { type: string }
       responses:
         200:
-          description: Purchase deleted
+          description: Purchase deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  id: { type: string, example: "pur_101" }
 
   /api/v1/purchases/{id}/feedback:
     patch:
       summary: Update Purchase Feedback & Rating
-      description: Refines AI styling memory with real user feedback (good/bad, 1-5 rating).
+      description: Refines AI styling memory with real user feedback (rating 1-5, feedback text).
       security:
         - BearerAuth: []
-      tags: [purchases]
+      tags: [Purchases, purchases]
       parameters:
         - in: path
           name: id
           required: true
           schema: { type: string }
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                feedback: { type: string, enum: [good, bad], example: "good" }
-                rating: { type: number, minimum: 1, maximum: 5, example: 5 }
-      responses:
-        200:
-          description: Feedback updated and memory refined
-
-
-  # SHOPPING BUDGET
-  /api/v1/budget:
-    get:
-      summary: Get Monthly Budget & Trends
-      description: Returns monthly budget limit, current spent, category breakdowns, and 6-month historical trends.
-      security:
-        - BearerAuth: []
-      tags: [budget]
-      responses:
-        200:
-          description: Budget overview and historical trends
-
-  /api/v1/budget/limit:
-    patch:
-      summary: Update Monthly Spending Ceiling
-      description: Modify monthly spending limit or category allocations.
-      security:
-        - BearerAuth: []
-      tags: [budget]
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                limit: { type: number, example: 800 }
-                categoryAllocations:
-                  type: object
-                  properties:
-                    tops: { type: number }
-                    bottoms: { type: number }
-                    outerwear: { type: number }
-                    shoes: { type: number }
-                    accessories: { type: number }
-      responses:
-        200:
-          description: Budget limits updated
-
-  /api/v1/budget/expense:
-    post:
-      summary: Record Clothing Purchase Expense
-      description: Adds a clothing purchase expense directly into monthly budget tracking and purchase ledger.
-      security:
-        - BearerAuth: []
-      tags: [budget]
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [amount, category]
               properties:
-                amount: { type: number, example: 2990 }
-                category: { type: string, example: "Tops" }
-                productName: { type: string, example: "Merino Wool Knit" }
-                brand: { type: string, example: "Uniqlo" }
-                notes: { type: string }
+                rating: { type: number, minimum: 1, maximum: 5, example: 5 }
+                feedback: { type: string, example: "Great material after 5 washes" }
+      responses:
+        200:
+          description: Updated purchase item with refreshed styling memory
+
+  # WARDROBE BUDGET & EXPENSE TRACKING
+  /api/v1/budget:
+    get:
+      summary: Get Wardrobe Budget & Expense Tracking
+      description: Returns monthly budget limit, current spent, remaining budget, and category allocations.
+      security:
+        - BearerAuth: []
+      tags: [Budget, budget]
+      parameters:
+        - in: query
+          name: monthYear
+          required: false
+          schema: { type: string, example: "2026-10" }
+          description: Filter budget and expenses by Year-Month (YYYY-MM)
+      responses:
+        200:
+          description: Budget overview and category breakdown
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      monthlyLimit: { type: number, example: 10000 }
+                      spentThisMonth: { type: number, example: 3450 }
+                      remainingBudget: { type: number, example: 6550 }
+                      currency: { type: string, example: "₹" }
+                      categories:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name: { type: string, example: "Clothing" }
+                            allocated: { type: number, example: 4000 }
+                            spent: { type: number, example: 1490 }
+                            color: { type: string, example: "#10B981" }
+
+  /api/v1/budget/limit:
+    patch:
+      summary: Update Budget Monthly Spending Limit
+      description: Modify monthly spending ceiling or category allocations.
+      security:
+        - BearerAuth: []
+      tags: [Budget, budget]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                monthlyLimit: { type: number, example: 15000 }
+      responses:
+        200:
+          description: Updated budget object
+
+  /api/v1/budget/expense:
+    post:
+      summary: Add Clothing Purchase Expense
+      description: Records expense and automatically updates spentThisMonth and category totals.
+      security:
+        - BearerAuth: []
+      tags: [Budget, budget]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, amount]
+              properties:
+                name: { type: string, example: "White Sneakers" }
+                amount: { type: number, example: 1499 }
+                category: { type: string, example: "Shoes" }
+                date: { type: string, example: "2026-10-15" }
+                purchaseId: { type: string, example: "pur_123" }
       responses:
         201:
-          description: Expense added to monthly budget tracking
+          description: Records expense and automatically updates spentThisMonth and category totals
 
 
   # AI CHAT ASSISTANT
@@ -906,7 +1261,7 @@ paths:
     get:
       summary: Get VAPID Public Key
       description: Returns public key used by browser service worker to generate push subscription.
-      tags: [notifications]
+      tags: [Notifications, notifications]
       responses:
         200:
           description: VAPID Public key
@@ -917,7 +1272,7 @@ paths:
       description: Stores browser push subscription endpoint and encryption keys for background notifications.
       security:
         - BearerAuth: []
-      tags: [notifications]
+      tags: [Notifications, notifications]
       requestBody:
         required: true
         content:
@@ -941,7 +1296,7 @@ paths:
       summary: Unsubscribe Device from Push Notifications
       security:
         - BearerAuth: []
-      tags: [notifications]
+      tags: [Notifications, notifications]
       requestBody:
         required: true
         content:
@@ -958,34 +1313,66 @@ paths:
   /api/v1/notifications:
     get:
       summary: Get Notification Feed & History
-      description: Returns list of notifications and unread count.
+      description: Returns list of notifications (title, message, type, read, createdAt) with unread filtering.
       security:
         - BearerAuth: []
-      tags: [notifications]
+      tags: [Notifications, notifications]
       parameters:
+        - in: query
+          name: unreadOnly
+          schema: { type: boolean, example: false }
+          description: If true, returns only unread notifications
         - in: query
           name: isRead
           schema: { type: boolean }
       responses:
         200:
-          description: Notification feed list
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  count: { type: number, example: 10 }
+                  unreadCount: { type: number, example: 2 }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, example: "notif_101" }
+                        title: { type: string, example: "☀️ Weather Styling Alert" }
+                        message: { type: string, example: "24°C and partly cloudy. Your Linen Camp Collar look is ready!" }
+                        type: { type: string, example: "weather" }
+                        read: { type: boolean, example: false }
+                        createdAt: { type: string, format: date-time, example: "2026-10-15T09:30:00Z" }
 
   /api/v1/notifications/read-all:
     patch:
       summary: Mark All Notifications as Read
+      description: Marks all authenticated user notifications as read.
       security:
         - BearerAuth: []
-      tags: [notifications]
+      tags: [Notifications, notifications]
       responses:
         200:
           description: All notifications marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "All notifications marked as read" }
 
   /api/v1/notifications/{id}/read:
     patch:
       summary: Mark Single Notification as Read
+      description: Marks a specific notification as read.
       security:
         - BearerAuth: []
-      tags: [notifications]
+      tags: [Notifications, notifications]
       parameters:
         - in: path
           name: id
@@ -994,13 +1381,21 @@ paths:
       responses:
         200:
           description: Notification marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Notification marked as read" }
 
   /api/v1/notifications/{id}:
     delete:
       summary: Delete Notification
+      description: Permanently remove a notification.
       security:
         - BearerAuth: []
-      tags: [notifications]
+      tags: [Notifications, notifications]
       parameters:
         - in: path
           name: id
@@ -1009,6 +1404,14 @@ paths:
       responses:
         200:
           description: Notification removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Notification deleted" }
+                  id: { type: string, example: "notif_101" }
 
   /api/v1/notifications/test-send:
     post:
@@ -1016,7 +1419,7 @@ paths:
       description: Triggers a test push notification to verify background & foreground handling.
       security:
         - BearerAuth: []
-      tags: [notifications]
+      tags: [Notifications, notifications]
       requestBody:
         content:
           application/json:

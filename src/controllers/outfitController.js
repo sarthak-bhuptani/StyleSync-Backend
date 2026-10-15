@@ -136,17 +136,19 @@ export const generateOutfit = async (req, res, next) => {
       weather: outfit.weather,
       style: outfit.style,
       matchScore: outfit.matchScore,
+      itemIds: populated.items.map((i) => i._id.toString()),
+      items: populated.items,
+      stylingRationale: outfit.aiReasoning || aiResult.aiReasoning || 'Effortless coordinated silhouette tailored to your physical traits.',
+      stylingTip: aiResult.aiReasoning || 'Roll the cuffs twice for a confident, effortless silhouette.',
       top: topItem ? { name: topItem.name, color: topItem.color, imageUrl: topItem.imageUrl, id: topItem._id } : null,
       bottom: bottomItem ? { name: bottomItem.name, color: bottomItem.color, imageUrl: bottomItem.imageUrl, id: bottomItem._id } : null,
       shoe: shoeItem ? { name: shoeItem.name, color: shoeItem.color, imageUrl: shoeItem.imageUrl, id: shoeItem._id } : null,
       layer: layerItem ? { name: layerItem.name, color: layerItem.color, imageUrl: layerItem.imageUrl, id: layerItem._id } : null,
-      stylingTip: aiResult.aiReasoning || 'Roll the cuffs twice for a confident, effortless silhouette.',
-      items: populated.items,
       aiReasoning: outfit.aiReasoning,
       colorHarmony: outfit.colorHarmony,
     };
 
-    res.status(201).json({
+    res.status(200).json({
       success: true,
       message: 'Outfit generated successfully',
       ...formattedResponse,
@@ -164,19 +166,30 @@ export const generateOutfit = async (req, res, next) => {
  */
 export const logWear = async (req, res, next) => {
   try {
-    const { outfitId, outfitTitle, occasion, date, temp, itemIds, notes } = req.body;
+    const { outfitId, outfitTitle, occasion, date, temp, itemIds: directItemIds, notes } = req.body;
 
-    if (!Array.isArray(itemIds) || itemIds.length === 0) {
+    let targetItemIds = Array.isArray(directItemIds) ? [...directItemIds] : [];
+
+    // If itemIds not provided or empty, resolve from outfitId
+    if (targetItemIds.length === 0 && outfitId && mongoose.Types.ObjectId.isValid(outfitId)) {
+      const outfit = await Outfit.findOne({ _id: outfitId, userId: req.user.id });
+      if (outfit && Array.isArray(outfit.items)) {
+        targetItemIds = outfit.items.map((i) => i.toString());
+      }
+    }
+
+    if (targetItemIds.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide an array of itemIds to increment wear count',
+        message: 'Please provide an array of itemIds or valid outfitId to log wear',
       });
     }
 
     // 1. Increment wearCount on all provided wardrobe items belonging to user
+    const validObjectIds = targetItemIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
     const updateResult = await WardrobeItem.updateMany(
       {
-        _id: { $in: itemIds },
+        _id: { $in: validObjectIds },
         userId: req.user.id,
       },
       {
@@ -187,25 +200,25 @@ export const logWear = async (req, res, next) => {
     // 2. Persist daily WearLog record in MongoDB for wear history tracking
     const wearLog = await WearLog.create({
       userId: req.user.id,
-      outfitId: outfitId || undefined,
+      outfitId: (outfitId && mongoose.Types.ObjectId.isValid(outfitId)) ? outfitId : undefined,
       outfitTitle: outfitTitle || 'Daily Worn Outfit',
       occasion: occasion || 'Daily Wear',
       date: date || new Date().toISOString().split('T')[0],
       temp: temp || 'Mild',
-      items: itemIds,
+      items: validObjectIds,
       notes: notes || '',
     });
 
     res.status(200).json({
       success: true,
-      message: 'Outfit logged! Item usage counts updated.',
+      message: 'Logged wear successfully',
       data: wearLog,
       loggedDetails: {
         outfitTitle: wearLog.outfitTitle,
         occasion: wearLog.occasion,
         date: wearLog.date,
         temp: wearLog.temp,
-        updatedItemsCount: updateResult.modifiedCount || itemIds.length,
+        updatedItemsCount: updateResult.modifiedCount || validObjectIds.length,
       },
     });
   } catch (error) {

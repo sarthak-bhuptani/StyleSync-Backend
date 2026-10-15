@@ -27,7 +27,7 @@ export const getGeminiModel = (modelName = 'gemini-3.5-flash-lite', options = {}
   return genAI.getGenerativeModel({
     model: modelName,
     generationConfig: {
-      maxOutputTokens: 250,
+      maxOutputTokens: 2048,
       temperature: 0.7,
       ...options.generationConfig,
     },
@@ -49,7 +49,7 @@ export const runWithAiResilience = async (operation) => {
       const model = genAI.getGenerativeModel({
         model: modelName,
         generationConfig: {
-          maxOutputTokens: 250,
+          maxOutputTokens: 2048,
           temperature: 0.7,
         },
       });

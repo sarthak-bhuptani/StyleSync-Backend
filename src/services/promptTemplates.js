@@ -95,6 +95,9 @@ ${wardrobeSummary && wardrobeSummary.length > 0
    - Score >= 75: 'BUY' (Highly recommended)
    - Score >= 55 and < 75: 'MAYBE' (Conditional recommendation)
    - Score < 55: 'SKIP' (Not recommended)
+7. COMPATIBLE WARDROBE MATCHING:
+   - Carefully review USER'S EXISTING WARDROBE ITEMS. Select 2 to 5 _id strings of wardrobe pieces that match aesthetically, complement colors, or complete outfits with this candidate item.
+   - If user has wardrobe items, populate their exact _id strings into compatibleWardrobeIds. Do NOT leave empty if wardrobe items exist!
 
 Return ONLY a valid, raw JSON object (no markdown, no quotes around json) with this exact schema:
 {
@@ -114,7 +117,7 @@ Return ONLY a valid, raw JSON object (no markdown, no quotes around json) with t
   "aiExplanation": "Clear, direct, actionable 2-4 sentence verdict explaining why this piece suits the user.",
   "strongMatches": ["Point 1 of why this works well", "Point 2 of synergy with physical traits or versatility"],
   "considerations": ["Helpful styling tip or pairing advice"],
-  "compatibleWardrobeIds": [],
+  "compatibleWardrobeIds": ["_id1", "_id2"],
   "physicalHarmony": {
     "faceMatch": "How this neckline/frame harmonizes with face shape",
     "complexionMatch": "How this color complements their undertone and color season",

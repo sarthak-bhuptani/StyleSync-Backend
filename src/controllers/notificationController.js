@@ -94,11 +94,15 @@ export const unsubscribePush = async (req, res, next) => {
  */
 export const getNotifications = async (req, res, next) => {
   try {
-    const { limit = 30, page = 1, isRead } = req.query;
+    const { limit = 30, page = 1, isRead, unreadOnly } = req.query;
 
     const query = { userId: req.user.id };
-    if (isRead !== undefined) {
-      query.isRead = isRead === 'true';
+    if (unreadOnly !== undefined) {
+      if (unreadOnly === 'true' || unreadOnly === true) {
+        query.isRead = false;
+      }
+    } else if (isRead !== undefined) {
+      query.isRead = isRead === 'true' || isRead === true;
     }
 
     const total = await Notification.countDocuments(query);
@@ -112,12 +116,27 @@ export const getNotifications = async (req, res, next) => {
       .skip((Number(page) - 1) * Number(limit))
       .limit(Number(limit));
 
+    const formattedNotifications = notifications.map((n) => ({
+      id: n._id.toString(),
+      _id: n._id,
+      title: n.title,
+      message: n.body,
+      body: n.body,
+      type: n.type,
+      read: n.isRead,
+      isRead: n.isRead,
+      createdAt: n.createdAt,
+      icon: n.icon || '',
+      url: n.url || '/',
+      data: n.data || {},
+    }));
+
     res.status(200).json({
       success: true,
-      count: notifications.length,
+      count: formattedNotifications.length,
       total,
       unreadCount,
-      data: notifications,
+      data: formattedNotifications,
     });
   } catch (error) {
     next(error);
@@ -147,7 +166,14 @@ export const markNotificationAsRead = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: 'Notification marked as read',
-      data: notification,
+      data: {
+        id: notification._id.toString(),
+        title: notification.title,
+        message: notification.body,
+        type: notification.type,
+        read: true,
+        createdAt: notification.createdAt,
+      },
     });
   } catch (error) {
     next(error);
@@ -196,7 +222,8 @@ export const deleteNotification = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'Notification removed',
+      message: 'Notification deleted',
+      id: req.params.id,
     });
   } catch (error) {
     next(error);

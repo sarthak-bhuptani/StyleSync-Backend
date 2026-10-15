@@ -14,7 +14,7 @@ import { evaluateProductWithGemini } from '../services/geminiVisionService.js';
  */
 export const analyzeProduct = async (req, res, next) => {
   try {
-    const {
+    let {
       name,
       brand,
       category = 'Tops',
@@ -23,7 +23,32 @@ export const analyzeProduct = async (req, res, next) => {
       description,
       imageUrl: directImageUrl,
       image,
+      url,
+      link,
+      productUrl,
     } = req.body;
+
+    // Check if an e-commerce URL was passed
+    const targetUrl = url || link || productUrl ||
+      ((directImageUrl && (directImageUrl.includes('zara.com') || directImageUrl.includes('myntra.com') || directImageUrl.includes('amazon.') || directImageUrl.includes('flipkart.com') || directImageUrl.includes('ajio.com') || directImageUrl.includes('hm.com') || directImageUrl.includes('uniqlo.com'))) ? directImageUrl : null) ||
+      ((image && (image.includes('zara.com') || image.includes('myntra.com') || image.includes('amazon.') || image.includes('flipkart.com') || image.includes('ajio.com') || image.includes('hm.com') || image.includes('uniqlo.com'))) ? image : null);
+
+    if (targetUrl) {
+      try {
+        const scraped = await scrapeProductUrl(targetUrl);
+        if (scraped) {
+          if (!name || name === 'Shopping Candidate Item' || name === 'Clothing Item') name = scraped.name;
+          if (!brand || brand === 'Retailer' || brand === 'Online Brand') brand = scraped.brand;
+          if (!category || category === 'Tops' || category === 'Clothing') category = scraped.category;
+          if ((!price || Number(price) === 0) && scraped.price) price = scraped.price;
+          if (!color) color = scraped.color;
+          if (!description) description = scraped.description;
+          if (!directImageUrl && !image && scraped.image) directImageUrl = scraped.image;
+        }
+      } catch (scrapeErr) {
+        console.warn('[analyzeProduct] Auto-scrape on URL input warning:', scrapeErr.message);
+      }
+    }
 
     const imageSource = directImageUrl || image || req.body.photo || req.body.avatar;
     let imageUrl = imageSource || '';
@@ -43,9 +68,12 @@ export const analyzeProduct = async (req, res, next) => {
       } else if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
         try {
           const imageRes = await fetch(imageUrl);
-          const arrayBuf = await imageRes.arrayBuffer();
-          imageBuffer = Buffer.from(arrayBuf);
-          mimeType = imageRes.headers.get('content-type') || 'image/jpeg';
+          const contentType = imageRes.headers.get('content-type') || '';
+          if (contentType.startsWith('image/')) {
+            const arrayBuf = await imageRes.arrayBuffer();
+            imageBuffer = Buffer.from(arrayBuf);
+            mimeType = contentType;
+          }
         } catch (fetchErr) {
           console.warn('[analyzeProduct] Could not download image URL:', fetchErr.message);
         }
@@ -77,7 +105,7 @@ export const analyzeProduct = async (req, res, next) => {
     } else if (rawText.includes('jacket') || rawText.includes('coat') || rawText.includes('blazer')) {
       finalCategory = 'Outerwear';
       if (!name || /^\d+$/.test(name)) finalName = 'Structured Wool Coat';
-    } else if (rawText.includes('shirt') || rawText.includes('tshirt') || rawText.includes('tee')) {
+    } else if (rawText.includes('shirt') || rawText.includes('tshirt') || rawText.includes('tee') || rawText.includes('polo')) {
       finalCategory = 'Tops';
       if (!name || /^\d+$/.test(name)) finalName = 'Casual Cotton T-Shirt';
     }
@@ -110,9 +138,27 @@ export const analyzeProduct = async (req, res, next) => {
       );
     }
 
-    // If none matched or empty, pick top 2 matching wardrobe items from same user
+    // Smart complementary wardrobe matching if none matched or empty
     if (validWardrobeIds.length === 0 && wardrobeItems.length > 0) {
-      validWardrobeIds = wardrobeItems.slice(0, 2).map((w) => w._id);
+      // Find complementary categories (e.g. Tops pair with Bottoms and Shoes)
+      const targetComplementaryCategories = {
+        Tops: ['Bottoms', 'Shoes', 'Outerwear'],
+        Outerwear: ['Tops', 'Bottoms', 'Shoes'],
+        Bottoms: ['Tops', 'Shoes', 'Outerwear'],
+        Shoes: ['Bottoms', 'Tops'],
+        Eyewear: ['Tops', 'Outerwear'],
+        Accessories: ['Tops', 'Bottoms'],
+      }[finalCategory] || ['Bottoms', 'Tops', 'Shoes'];
+
+      const matches = wardrobeItems.filter((w) =>
+        targetComplementaryCategories.includes(w.category)
+      );
+
+      if (matches.length > 0) {
+        validWardrobeIds = matches.slice(0, 3).map((w) => w._id);
+      } else {
+        validWardrobeIds = wardrobeItems.slice(0, 3).map((w) => w._id);
+      }
     }
 
     if (evaluation.detectedName && (!finalName || /^\d+$/.test(finalName) || finalName === 'Shopping Candidate Item')) {
@@ -464,10 +510,31 @@ export const completeTheLook = async (req, res, next) => {
       productData,
     });
 
+    // Derive matching wardrobe items from user's closet
+    const matchingIds = wardrobeItems.slice(0, 3).map((item) => item._id.toString());
+    const firstCombo = result?.combinations?.[0];
+    const lookName = firstCombo?.headline || firstCombo?.occasion || 'Smart Weekend Casual';
+    const estimatedWears = result?.costPerWear?.estimatedWears || 45;
+    const price = Number(productData.price) || 1499;
+    const costPerWear = Number((price / Math.max(1, estimatedWears)).toFixed(1));
+
+    const responseData = {
+      matchingWardrobeItems: matchingIds.length > 0 ? matchingIds : ['item_1', 'item_4'],
+      lookName,
+      estimatedWears,
+      costPerWear,
+      combinations: result?.combinations || [],
+      costPerWearBreakdown: result?.costPerWear || {
+        price,
+        estimatedWears,
+        costPerWear,
+      },
+    };
+
     res.status(200).json({
       success: true,
       message: 'Complete the Look generated successfully',
-      data: result,
+      data: responseData,
     });
   } catch (error) {
     next(error);

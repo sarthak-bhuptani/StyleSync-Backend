@@ -9,6 +9,7 @@ import budgetRoutes from './budgetRoutes.js';
 import chatRoutes from './chatRoutes.js';
 import recommendationRoutes from './recommendationRoutes.js';
 import notificationRoutes from './notificationRoutes.js';
+import collectionRoutes from './collectionRoutes.js';
 
 const router = express.Router();
 
@@ -23,6 +24,7 @@ router.use('/chat', chatRoutes);
 router.use('/recommendations', recommendationRoutes);
 router.use('/gaps', recommendationRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/collections', collectionRoutes);
 
 export default router;
 

@@ -1,9 +1,10 @@
+import mongoose from 'mongoose';
 import { Purchase } from '../models/Purchase.js';
 import { Budget } from '../models/Budget.js';
 import { uploadImage } from '../config/cloudinary.js';
 
 /**
- * @desc    Get all recorded purchases
+ * @desc    Get all recorded purchases with CPW and rating
  * @route   GET /api/v1/purchases
  * @access  Private
  */
@@ -11,6 +12,7 @@ export const getPurchases = async (req, res, next) => {
   try {
     const purchases = await Purchase.find({ userId: req.user.id }).sort({
       purchasedAt: -1,
+      createdAt: -1,
     });
 
     const totalSpent = purchases.reduce((sum, item) => sum + (item.price || 0), 0);
@@ -22,14 +24,43 @@ export const getPurchases = async (req, res, next) => {
           )
         : 0;
 
+    const formattedPurchases = purchases.map((p) => {
+      const wearCount = p.wearCount || 0;
+      const costPerWear = wearCount > 0 ? Number((p.price / wearCount).toFixed(1)) : p.price;
+      const formattedDate = p.date
+        ? p.date.toISOString().split('T')[0]
+        : p.purchasedAt
+        ? p.purchasedAt.toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0];
+
+      return {
+        id: p._id.toString(),
+        _id: p._id,
+        name: p.productName,
+        productName: p.productName,
+        brand: p.brand || '',
+        category: p.category || 'Tops',
+        price: p.price,
+        currency: p.currency || '₹',
+        date: formattedDate,
+        imageUrl: p.imageUrl || '',
+        wearCount,
+        costPerWear,
+        userRating: p.rating || 5,
+        userFeedback: p.feedback || '',
+        buyWiseScore: p.buyWiseScore || 85,
+        createdAt: p.createdAt,
+      };
+    });
+
     res.status(200).json({
       success: true,
-      count: purchases.length,
+      count: formattedPurchases.length,
       metrics: {
         totalSpent,
         avgStyleSyncScore: avgScore,
       },
-      data: purchases,
+      data: formattedPurchases,
     });
   } catch (error) {
     next(error);
@@ -44,6 +75,7 @@ export const getPurchases = async (req, res, next) => {
 export const recordPurchase = async (req, res, next) => {
   try {
     const {
+      name,
       productName,
       price,
       category = 'Tops',
@@ -56,14 +88,17 @@ export const recordPurchase = async (req, res, next) => {
       userFeedback,
       rating,
       userRating,
+      wearCount = 0,
       image,
       imageUrl: directImageUrl,
     } = req.body;
 
-    if (!productName || price === undefined) {
+    const finalName = name || productName;
+
+    if (!finalName || price === undefined) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide productName and price',
+        message: 'Please provide product name and price',
       });
     }
 
@@ -80,24 +115,29 @@ export const recordPurchase = async (req, res, next) => {
 
     const purchase = await Purchase.create({
       userId: req.user.id,
-      productName,
+      productName: finalName.trim(),
       price: Number(price),
       currency: currency || '₹',
-      category,
-      brand,
-      buyWiseScore: Number(buyWiseScore),
+      category: category.trim(),
+      brand: brand.trim(),
+      buyWiseScore: Number(buyWiseScore) || 85,
       notes,
-      feedback: userFeedback || feedback || 'pending',
+      wearCount: Number(wearCount) || 0,
+      feedback: userFeedback !== undefined ? userFeedback : feedback || '',
       rating: userRating !== undefined ? Number(userRating) : rating !== undefined ? Number(rating) : 5,
       imageUrl: finalImageUrl,
       date: purchaseDate,
       purchasedAt: purchaseDate,
     });
 
-    // Optionally update user budget spent for the current month
+    // Update user budget spent for current month
     const budget = await Budget.findOne({ userId: req.user.id });
-    if (budget && budget.monthlyHistory.length > 0) {
-      const currentMonthEntry = budget.monthlyHistory[budget.monthlyHistory.length - 1];
+    if (budget && budget.monthlyHistory && budget.monthlyHistory.length > 0) {
+      const currentMonthStr = purchaseDate.toISOString().slice(0, 7);
+      let currentMonthEntry = budget.monthlyHistory.find((m) => m.month === currentMonthStr);
+      if (!currentMonthEntry) {
+        currentMonthEntry = budget.monthlyHistory[budget.monthlyHistory.length - 1];
+      }
       if (currentMonthEntry) {
         currentMonthEntry.spent += Number(price);
         currentMonthEntry.saved = Math.max(0, currentMonthEntry.limit - currentMonthEntry.spent);
@@ -122,20 +162,28 @@ export const recordPurchase = async (req, res, next) => {
  */
 export const updateFeedback = async (req, res, next) => {
   try {
+    const { id } = req.params;
     const { feedback, userFeedback, rating, userRating } = req.body;
 
     const finalFeedback = userFeedback !== undefined ? userFeedback : feedback;
     const finalRating = userRating !== undefined ? userRating : rating;
 
-    if (!finalFeedback && finalRating === undefined) {
+    if (finalFeedback === undefined && finalRating === undefined) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide feedback ("good" | "bad") or rating (1-5)',
+        message: 'Please provide feedback or rating (1-5)',
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid purchase ID format',
       });
     }
 
     const purchase = await Purchase.findOne({
-      _id: req.params.id,
+      _id: id,
       userId: req.user.id,
     });
 
@@ -146,7 +194,7 @@ export const updateFeedback = async (req, res, next) => {
       });
     }
 
-    if (finalFeedback !== undefined) purchase.feedback = finalFeedback;
+    if (finalFeedback !== undefined) purchase.feedback = String(finalFeedback);
     if (finalRating !== undefined) purchase.rating = Number(finalRating);
 
     await purchase.save();
@@ -168,8 +216,17 @@ export const updateFeedback = async (req, res, next) => {
  */
 export const deletePurchase = async (req, res, next) => {
   try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid purchase ID format',
+      });
+    }
+
     const purchase = await Purchase.findOneAndDelete({
-      _id: req.params.id,
+      _id: id,
       userId: req.user.id,
     });
 
@@ -182,10 +239,10 @@ export const deletePurchase = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'Purchase deleted.',
+      id,
+      message: 'Purchase deleted',
     });
   } catch (error) {
     next(error);
   }
 };
-

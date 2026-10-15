@@ -13,33 +13,47 @@ export const getBudget = async (req, res, next) => {
     if (!budget) {
       budget = await Budget.create({
         userId: req.user.id,
-        monthlyLimit: 600,
+        monthlyLimit: 10000,
+        currency: '₹',
         categoryAllocations: {
-          tops: 150,
-          bottoms: 120,
-          outerwear: 150,
-          shoes: 120,
-          accessories: 60,
+          tops: 2000,
+          bottoms: 2000,
+          outerwear: 1500,
+          shoes: 3000,
+          accessories: 1500,
         },
         monthlyHistory: [
-          { month: '2024-10', monthName: 'Oct', limit: 600, spent: 480, saved: 120 },
-          { month: '2024-11', monthName: 'Nov', limit: 600, spent: 550, saved: 50 },
-          { month: '2024-12', monthName: 'Dec', limit: 700, spent: 680, saved: 20 },
-          { month: '2025-01', monthName: 'Jan', limit: 600, spent: 420, saved: 180 },
-          { month: '2025-02', monthName: 'Feb', limit: 600, spent: 380, saved: 220 },
-          { month: '2025-03', monthName: 'Mar', limit: 600, spent: 510, saved: 90 },
+          { month: '2026-05', monthName: 'May', limit: 10000, spent: 6800, saved: 3200 },
+          { month: '2026-06', monthName: 'Jun', limit: 10000, spent: 7500, saved: 2500 },
+          { month: '2026-07', monthName: 'Jul', limit: 10000, spent: 8200, saved: 1800 },
+          { month: '2026-08', monthName: 'Aug', limit: 10000, spent: 5400, saved: 4600 },
+          { month: '2026-09', monthName: 'Sep', limit: 10000, spent: 6100, saved: 3900 },
+          { month: '2026-10', monthName: 'Oct', limit: 10000, spent: 3450, saved: 6550 },
         ],
       });
     }
 
-    // Calculate current month's purchases
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
+    // Determine target month/year
+    const { monthYear } = req.query;
+    let startDate;
+    let endDate;
+
+    if (monthYear && /^\d{4}-\d{2}$/.test(monthYear)) {
+      const [year, month] = monthYear.split('-').map(Number);
+      startDate = new Date(Date.UTC(year, month - 1, 1));
+      endDate = new Date(Date.UTC(year, month, 1));
+    } else {
+      const now = new Date();
+      startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+      endDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+    }
 
     const currentMonthPurchases = await Purchase.find({
       userId: req.user.id,
-      purchasedAt: { $gte: startOfMonth },
+      $or: [
+        { purchasedAt: { $gte: startDate, $lt: endDate } },
+        { date: { $gte: startDate, $lt: endDate } },
+      ],
     });
 
     const currentSpent = currentMonthPurchases.reduce(
@@ -47,66 +61,81 @@ export const getBudget = async (req, res, next) => {
       0
     );
 
-    // Calculate category spend totals
-    const categorySpent = {
-      tops: 0,
-      bottoms: 0,
-      outerwear: 0,
-      shoes: 0,
-      accessories: 0,
-      other: 0,
-    };
+    // Group expenses into primary categories
+    let clothingSpent = 0;
+    let shoesSpent = 0;
+    let accessoriesSpent = 0;
+    let otherSpent = 0;
 
     currentMonthPurchases.forEach((p) => {
-      const cat = (p.category || 'other').toLowerCase();
-      if (categorySpent[cat] !== undefined) {
-        categorySpent[cat] += p.price || 0;
+      const cat = (p.category || '').toLowerCase();
+      const pr = Number(p.price) || 0;
+      if (cat.includes('shoe') || cat.includes('sneaker') || cat.includes('footwear') || cat.includes('boot')) {
+        shoesSpent += pr;
+      } else if (cat.includes('access') || cat.includes('eyewear') || cat.includes('bag') || cat.includes('watch') || cat.includes('belt')) {
+        accessoriesSpent += pr;
+      } else if (
+        cat.includes('top') ||
+        cat.includes('bottom') ||
+        cat.includes('shirt') ||
+        cat.includes('pant') ||
+        cat.includes('jean') ||
+        cat.includes('dress') ||
+        cat.includes('outer') ||
+        cat.includes('jacket') ||
+        cat.includes('cloth')
+      ) {
+        clothingSpent += pr;
       } else {
-        categorySpent.other += p.price || 0;
+        otherSpent += pr;
       }
     });
 
-    const remaining = Math.max(0, budget.monthlyLimit - currentSpent);
+    const monthlyLimit = budget.monthlyLimit || 10000;
+    const remainingBudget = Math.max(0, monthlyLimit - currentSpent);
     const percentUsed =
-      budget.monthlyLimit > 0
-        ? Math.min(100, Math.round((currentSpent / budget.monthlyLimit) * 100))
+      monthlyLimit > 0
+        ? Math.min(100, Math.round((currentSpent / monthlyLimit) * 100))
         : 0;
 
-    const categoriesArray = [
-      { name: 'Tops', allocated: budget.categoryAllocations?.tops || 8000, spent: categorySpent.tops },
-      { name: 'Bottoms', allocated: budget.categoryAllocations?.bottoms || 7000, spent: categorySpent.bottoms },
-      { name: 'Shoes', allocated: budget.categoryAllocations?.shoes || 6000, spent: categorySpent.shoes },
-      { name: 'Outerwear', allocated: budget.categoryAllocations?.outerwear || 4000, spent: categorySpent.outerwear },
+    // Proportional or configured allocations
+    const clothingAllocated = Math.round(monthlyLimit * 0.4);
+    const shoesAllocated = Math.round(monthlyLimit * 0.3);
+    const accessoriesAllocated = Math.round(monthlyLimit * 0.2);
+    const otherAllocated = Math.max(0, monthlyLimit - clothingAllocated - shoesAllocated - accessoriesAllocated);
+
+    const categories = [
+      { name: 'Clothing', allocated: clothingAllocated, spent: clothingSpent, color: '#10B981' },
+      { name: 'Shoes', allocated: shoesAllocated, spent: shoesSpent, color: '#3B82F6' },
+      { name: 'Accessories', allocated: accessoriesAllocated, spent: accessoriesSpent, color: '#F59E0B' },
+      { name: 'Other', allocated: otherAllocated, spent: otherSpent, color: '#8B5CF6' },
     ];
 
     const sixMonthTrends = (budget.monthlyHistory || []).slice(-6).map((m) => ({
       month: m.monthName || m.month,
       spent: m.spent || 0,
-      limit: m.limit || budget.monthlyLimit,
+      limit: m.limit || monthlyLimit,
       saved: m.saved || 0,
     }));
 
     res.status(200).json({
       success: true,
-      monthlyLimit: budget.monthlyLimit,
+      monthlyLimit,
       spentThisMonth: currentSpent,
+      remainingBudget,
       currency: budget.currency || '₹',
-      categories: categoriesArray,
-      sixMonthTrends: sixMonthTrends.length > 0 ? sixMonthTrends : [
-        { month: 'Apr', spent: 12000 },
-        { month: 'May', spent: 18500 },
-        { month: 'Jun', spent: currentSpent || 14200 },
-      ],
+      categories,
+      sixMonthTrends,
       data: {
-        monthlyLimit: budget.monthlyLimit,
-        currentSpent,
+        monthlyLimit,
         spentThisMonth: currentSpent,
-        remaining,
-        percentUsed,
+        remainingBudget,
         currency: budget.currency || '₹',
+        categories,
+        currentSpent,
+        remaining: remainingBudget,
+        percentUsed,
         categoryAllocations: budget.categoryAllocations,
-        categorySpent,
-        categories: categoriesArray,
         monthlyHistory: budget.monthlyHistory,
         sixMonthTrends,
       },
@@ -123,17 +152,26 @@ export const getBudget = async (req, res, next) => {
  */
 export const updateBudgetLimit = async (req, res, next) => {
   try {
-    const { limit, monthlyLimit, categoryAllocations } = req.body;
+    const { limit, monthlyLimit, categoryAllocations, currency } = req.body;
 
-    const newLimit = limit !== undefined ? Number(limit) : monthlyLimit !== undefined ? Number(monthlyLimit) : undefined;
+    const newLimit =
+      monthlyLimit !== undefined
+        ? Number(monthlyLimit)
+        : limit !== undefined
+        ? Number(limit)
+        : undefined;
 
     let budget = await Budget.findOne({ userId: req.user.id });
     if (!budget) {
       budget = new Budget({ userId: req.user.id });
     }
 
-    if (newLimit !== undefined) {
+    if (newLimit !== undefined && !isNaN(newLimit) && newLimit >= 0) {
       budget.monthlyLimit = newLimit;
+    }
+
+    if (currency) {
+      budget.currency = currency;
     }
 
     if (categoryAllocations) {
@@ -166,12 +204,13 @@ export const addExpense = async (req, res, next) => {
     const {
       amount,
       price,
-      category = 'Tops',
+      category = 'Clothing',
       productName,
       name,
       notes = '',
       brand = '',
       date,
+      purchaseId,
     } = req.body;
 
     const expenseAmount = Number(amount !== undefined ? amount : price);
@@ -183,34 +222,56 @@ export const addExpense = async (req, res, next) => {
       });
     }
 
-    const finalProductName = productName || name || `${category} Purchase`;
+    const finalProductName = name || productName || `${category} Expense`;
     const expenseDate = date ? new Date(date) : new Date();
 
-    // 1. Create Purchase record in Database
-    const purchase = await Purchase.create({
-      userId: req.user.id,
-      productName: finalProductName,
-      price: expenseAmount,
-      category,
-      brand,
-      notes,
-      purchasedAt: expenseDate,
-      date: expenseDate,
-    });
+    // 1. Create or link Purchase record
+    let purchase;
+    if (purchaseId && /^[0-9a-fA-F]{24}$/.test(purchaseId)) {
+      purchase = await Purchase.findOne({ _id: purchaseId, userId: req.user.id });
+    }
 
-    // 2. Update Budget monthly spent
+    if (!purchase) {
+      purchase = await Purchase.create({
+        userId: req.user.id,
+        productName: finalProductName,
+        price: expenseAmount,
+        category,
+        brand,
+        notes,
+        purchasedAt: expenseDate,
+        date: expenseDate,
+      });
+    }
+
+    // 2. Update Budget monthly spent & history
     let budget = await Budget.findOne({ userId: req.user.id });
     if (!budget) {
-      budget = await Budget.create({ userId: req.user.id, monthlyLimit: 25000 });
+      budget = await Budget.create({ userId: req.user.id, monthlyLimit: 10000 });
     }
 
-    if (budget.monthlyHistory && budget.monthlyHistory.length > 0) {
-      const currentMonth = budget.monthlyHistory[budget.monthlyHistory.length - 1];
-      if (currentMonth) {
-        currentMonth.spent += expenseAmount;
-        currentMonth.saved = Math.max(0, currentMonth.limit - currentMonth.spent);
-      }
+    const monthStr = expenseDate.toISOString().slice(0, 7); // e.g. "2026-10"
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthName = monthNames[expenseDate.getMonth()];
+
+    if (!budget.monthlyHistory) {
+      budget.monthlyHistory = [];
     }
+
+    let historyEntry = budget.monthlyHistory.find((m) => m.month === monthStr);
+    if (!historyEntry) {
+      historyEntry = {
+        month: monthStr,
+        monthName,
+        limit: budget.monthlyLimit,
+        spent: 0,
+        saved: budget.monthlyLimit,
+      };
+      budget.monthlyHistory.push(historyEntry);
+    }
+
+    historyEntry.spent += expenseAmount;
+    historyEntry.saved = Math.max(0, historyEntry.limit - historyEntry.spent);
 
     await budget.save();
 
@@ -220,11 +281,12 @@ export const addExpense = async (req, res, next) => {
       data: {
         purchase,
         budget,
+        spentThisMonth: historyEntry.spent,
+        monthlyLimit: budget.monthlyLimit,
+        remainingBudget: Math.max(0, budget.monthlyLimit - historyEntry.spent),
       },
     });
   } catch (error) {
     next(error);
   }
 };
-
-

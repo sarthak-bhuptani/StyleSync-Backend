@@ -43,7 +43,47 @@ const notificationSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    toJSON: {
+      virtuals: true,
+      transform: (doc, ret) => {
+        ret.id = ret._id.toString();
+        ret.message = ret.body;
+        ret.read = ret.isRead;
+        delete ret.__v;
+        return ret;
+      },
+    },
+    toObject: {
+      virtuals: true,
+      transform: (doc, ret) => {
+        ret.id = ret._id.toString();
+        ret.message = ret.body;
+        ret.read = ret.isRead;
+        delete ret.__v;
+        return ret;
+      },
+    },
   }
 );
+
+notificationSchema.virtual('id').get(function () {
+  return this._id.toString();
+});
+
+notificationSchema.virtual('message')
+  .get(function () {
+    return this.body;
+  })
+  .set(function (val) {
+    this.body = val;
+  });
+
+notificationSchema.virtual('read')
+  .get(function () {
+    return this.isRead;
+  })
+  .set(function (val) {
+    this.isRead = val;
+  });
 
 export const Notification = mongoose.model('Notification', notificationSchema);

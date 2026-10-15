@@ -331,15 +331,82 @@ export const scanFaceAndBody = async (req, res, next) => {
 
     await user.save();
 
+    // Map calibrated face shape recommendations
+    const necklinesByShape = {
+      Oval: ['Camp Collar', 'Crew Neck', 'Structured Lapel'],
+      Square: ['Crew Neck', 'Curved Scoop', 'Soft Lapel'],
+      Round: ['V-Neck', 'Point Collar', 'Structured Lapel'],
+      Heart: ['Boat Neck', 'Crew Neck', 'Wide Lapel'],
+      Oblong: ['Crew Neck', 'Turtleneck', 'Horizontal Spread Collar'],
+      Diamond: ['Camp Collar', 'V-Neck', 'Notched Lapel'],
+    };
+
+    const detectedFaceType = detectedTraits.faceShape || user.physicalTraits?.faceShape || 'Oval';
+    const bestNecklines = necklinesByShape[detectedFaceType] || ['Camp Collar', 'Crew Neck', 'Structured Lapel'];
+
+    // Map recommended and avoid palettes with human-readable names
+    const defaultRecommended = [
+      { name: 'Sage Green', hex: '#879F84' },
+      { name: 'Warm Taupe', hex: '#B39D82' },
+      { name: 'Terracotta', hex: '#C86D51' },
+    ];
+    const defaultAvoid = [
+      { name: 'Neon Yellow', hex: '#FFFF33' },
+      { name: 'Icy Blue', hex: '#D8ECF8' },
+    ];
+
+    let recommendedColors = defaultRecommended;
+    if (Array.isArray(detectedTraits.recommendedPalette) && detectedTraits.recommendedPalette.length > 0) {
+      recommendedColors = detectedTraits.recommendedPalette.slice(0, 4).map((c, idx) => {
+        if (typeof c === 'object' && c.name && c.hex) return c;
+        const hex = typeof c === 'string' ? c : '#879F84';
+        const names = ['Sage Green', 'Warm Taupe', 'Terracotta', 'Forest Olive', 'Warm Ochre'];
+        return { name: names[idx] || `Shade ${idx + 1}`, hex };
+      });
+    }
+
+    let avoidColors = defaultAvoid;
+    if (Array.isArray(detectedTraits.avoidPalette) && detectedTraits.avoidPalette.length > 0) {
+      avoidColors = detectedTraits.avoidPalette.slice(0, 2).map((c, idx) => {
+        if (typeof c === 'object' && c.name && c.hex) return c;
+        const hex = typeof c === 'string' ? c : '#FFFF33';
+        const names = ['Neon Yellow', 'Icy Blue', 'Electric Magenta'];
+        return { name: names[idx] || `Contrast Clash ${idx + 1}`, hex };
+      });
+    }
+
+    const harmonyScore = parseInt(detectedTraits.confidence || '96', 10) || 96;
+
+    const formattedScannerResult = {
+      faceShape: {
+        type: `${detectedFaceType} / Angular`,
+        harmony: 'Balanced',
+        bestNecklines,
+        description: 'Defined jawline with balanced symmetry.',
+      },
+      undertone: {
+        type: detectedTraits.skinUndertone || user.physicalTraits?.skinUndertone || 'Warm Olive',
+        season: detectedTraits.colorSeason || user.physicalTraits?.colorSeason || 'Soft Autumn',
+        harmony: 'Harmonious',
+        recommendedColors,
+        avoidColors,
+      },
+      silhouette: {
+        type: detectedTraits.bodySilhouette || user.physicalTraits?.bodySilhouette || 'Athletic Proportion',
+        proportions: `${user.physicalTraits?.height || "5'11\""} · Balanced Torso`,
+        advice: detectedTraits.stylingNotes || 'Tapered trousers and relaxed structured overshirts complement shoulder width.',
+      },
+      overallHarmonyScore: harmonyScore,
+      user,
+      physicalTraits: user.physicalTraits,
+      detectedAnalysis: detectedTraits,
+      avatar: user.avatar,
+    };
+
     res.status(200).json({
       success: true,
       message: 'Physical traits calibrated successfully with AI Vision',
-      data: {
-        user,
-        physicalTraits: user.physicalTraits,
-        detectedAnalysis: detectedTraits,
-        avatar: user.avatar,
-      },
+      data: formattedScannerResult,
     });
   } catch (error) {
     next(error);
@@ -361,15 +428,23 @@ export const getColorDraping = async (req, res, next) => {
 
     const drapingData = await getColorDrapingAnalysisWithGemini(user.physicalTraits);
 
+    const season = drapingData.season || user.physicalTraits?.colorSeason || 'Deep Autumn';
+    const undertone = drapingData.undertone || user.physicalTraits?.skinUndertone || 'Warm Golden';
+    const drapingInsight = drapingData.drapingInsight || 'Rich, warm pigments absorb light harmoniously against your undertone.';
+    const swatches = drapingData.swatches || [];
+
     res.status(200).json({
       success: true,
       message: 'Color draping matrix generated',
-      season: drapingData.season || user.physicalTraits?.colorSeason || 'Deep Autumn',
-      undertone: drapingData.undertone || user.physicalTraits?.skinUndertone || 'Warm Golden',
-      drapingInsight: drapingData.drapingInsight || '',
-      swatches: drapingData.swatches || [],
+      season,
+      undertone,
+      drapingInsight,
+      swatches,
       data: {
-        ...drapingData,
+        season,
+        undertone,
+        drapingInsight,
+        swatches,
         avatar: user.avatar,
         faceShape: user.physicalTraits?.faceShape || 'Oval',
       },
